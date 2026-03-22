@@ -1,0 +1,266 @@
+// prisma/schema.prisma
+// =============================================================================
+// MehmanGhar Financial OS — Prisma Schema
+// v3.0 — Phase 2
+//
+// Prisma 7 changes reflected here:
+//   - datasource block has `provider` only — no `url` or `directUrl`.
+//     Connection URL lives in prisma.config.ts (Prisma CLI) and
+//     src/lib/db.ts via @prisma/adapter-pg (Next.js runtime).
+//   - generator uses `prisma-client` provider + `engineType = "client"`.
+//     This enables the Rust-free engine — no binary downloaded at install time.
+//
+// 11 tables:
+//   Auth / RBAC  : roles, users
+//   Core data    : properties, investors, guests, bookings
+//   Finance      : daily_expenses, expenses, payouts
+//   Reporting    : reports
+//   Config       : utils_settings
+// =============================================================================
+
+generator client {
+  provider   = "prisma-client"
+  output     = "../src/generated/prisma/client"
+  engineType = "client"
+}
+
+datasource db {
+  // provider only — url is configured in prisma.config.ts (Prisma 7)
+  provider = "postgresql"
+}
+
+// =============================================================================
+// AUTH / RBAC
+// =============================================================================
+
+model Role {
+  id   String @id @default(cuid())
+  name String @unique
+
+  /// Shape: { [tabKey: string]: boolean }
+  tab_permissions Json
+
+  /// Shape: { [tabKey: string]: { create: boolean, read: boolean, update: boolean, delete: boolean } }
+  crud_permissions Json
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id            String @id @default(cuid())
+  username      String @unique
+  password_hash String
+
+  role_id String
+  role    Role   @relation(fields: [role_id], references: [id])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("users")
+}
+
+// =============================================================================
+// CORE DATA
+// =============================================================================
+
+model Property {
+  id      String  @id @default(cuid())
+  name    String
+  address String?
+
+  /// Supabase Storage path — future scope. Path only, not full URL (v3 plan Section 3.4).
+  image_path String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  investors      Investor[]
+  bookings       Booking[]
+  daily_expenses DailyExpense[]
+  expenses       Expense[]
+  payouts        Payout[]
+
+  @@map("properties")
+}
+
+model Investor {
+  id          String   @id @default(cuid())
+  property_id String
+  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  name String
+
+  /// Used in calcROI(). Returns null (not 0) when zero — v3 plan Section 4.2.
+  capital   Decimal @db.Decimal(14, 2)
+
+  /// Profit share percentage (e.g. 40.000 = 40%).
+  share_pct Decimal @db.Decimal(6, 3)
+
+  notes String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  payouts Payout[]
+
+  @@map("investors")
+}
+
+model Guest {
+  id          String  @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  nationality String?
+  notes       String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@map("guests")
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  property_id String
+  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  guest_id String?
+  guest    Guest?  @relation(fields: [guest_id], references: [id], onDelete: SetNull)
+
+  check_in  DateTime @db.Date
+  check_out DateTime @db.Date
+
+  /// Stored (not computed) — used in ADR and RevPAR in calcF().
+  nights  Int
+  revenue Decimal @db.Decimal(14, 2)
+
+  /// "Airbnb" | "Booking.com" | "Direct" | "MakeMyTrip" | etc.
+  platform String?
+
+  /// "confirmed" | "checked_in" | "checked_out" | "cancelled"
+  status String @default("confirmed")
+
+  notes String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("bookings")
+}
+
+// =============================================================================
+// FINANCE
+// =============================================================================
+
+/// Day-level expense log (Daily Expenses tab).
+model DailyExpense {
+  id          String   @id @default(cuid())
+  property_id String
+  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  expense_date DateTime @db.Date
+  category     String
+  description  String?
+  amount       Decimal  @db.Decimal(14, 2)
+
+  /// Supabase Storage path — future scope. Path only (v3 plan Section 3.4).
+  /// UI shows icon by default; signed URL fetched only on click (v3 plan Section 3.2).
+  invoice_path String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("daily_expenses")
+}
+
+/// Period-level operating expense (Expenses tab) — e.g. rent, salaries.
+model Expense {
+  id          String   @id @default(cuid())
+  property_id String
+  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  year     Int
+  month    Int
+  category String
+  amount   Decimal @db.Decimal(14, 2)
+  notes    String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("expenses")
+}
+
+/// Investor payout record.
+model Payout {
+  id          String   @id @default(cuid())
+  property_id String
+  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  investor_id String
+  investor    Investor @relation(fields: [investor_id], references: [id], onDelete: Cascade)
+
+  year  Int
+  month Int
+
+  /// Computed from calcF() — what the investor is owed.
+  amount_owed Decimal @db.Decimal(14, 2)
+
+  /// Actual amount paid. Null if unpaid.
+  amount_paid Decimal?  @db.Decimal(14, 2)
+  paid_on     DateTime? @db.Date
+
+  notes String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("payouts")
+}
+
+// =============================================================================
+// REPORTING
+// =============================================================================
+
+/// Generated report record. Immutable once created.
+model Report {
+  id          String  @id @default(cuid())
+  property_id String?
+
+  title       String
+  period_type String // "monthly" | "quarterly" | "annual" | "financial_year"
+  year        Int
+  month       Int?   // null for annual / financial_year reports
+
+  /// Full calcF() output plus aggregations.
+  data Json
+
+  created_at DateTime @default(now())
+
+  @@map("reports")
+}
+
+// =============================================================================
+// CONFIG
+// =============================================================================
+
+/// Key-value config store for the Utils tab. Editable by SuperAdmin.
+model UtilsSetting {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  value       Json
+  description String?
+
+  updated_at DateTime @updatedAt
+
+  @@map("utils_settings")
+}
