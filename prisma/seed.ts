@@ -1,20 +1,16 @@
 // prisma/seed.ts
 // =============================================================================
-// MehmanGhar Financial OS — SuperAdmin Seed Script
-// Phase 2 — run once after the schema is migrated.
+// MehmanGhar Financial OS — Database Seed Script
 //
-// Usage:
-//   npx prisma db seed
+// Seeds two roles and one SuperAdmin user.
+// Idempotent — safe to re-run at any time.
 //
-// Reads credentials from environment variables — never hardcoded.
-// Required env vars (set in .env.local):
-//   SEED_SUPERADMIN_USERNAME  — the SuperAdmin login username
-//   SEED_SUPERADMIN_PASSWORD  — the plaintext initial password (hashed on write)
-//   BCRYPT_ROUNDS             — bcrypt work factor (plan specifies 12)
-//   DIRECT_URL                — direct Supabase connection (no pooler)
+// Roles seeded:
+//   SuperAdmin — full access to all 12 tabs + user management
+//   Admin      — Daily Expenses + Bookings only (v3 plan Section 7,
+//                Open Decision #2: confirm tab scope with business owner)
 //
-// Idempotent: re-running will not create duplicates. If the SuperAdmin role
-// or user already exists, the script updates them in place (upsert).
+// Usage: npx prisma db seed
 // =============================================================================
 
 import { config } from "dotenv";
@@ -23,82 +19,65 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client/client";
 import bcrypt from "bcryptjs";
 
-// Load .env.local — tsx does not follow Next.js env conventions.
-// Must run before any process.env access.
 config({ path: ".env.local" });
 
-// ---------------------------------------------------------------------------
-// Prisma 7: rust-free engine requires a driver adapter.
-// Seed uses DIRECT_URL (same as prisma.config.ts) to bypass the pooler.
-// ---------------------------------------------------------------------------
-
-const pool = new Pool({
-  connectionString: process.env.DIRECT_URL,
-});
+const pool = new Pool({ connectionString: process.env.DIRECT_URL });
 const adapter = new PrismaPg(pool);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prisma = new PrismaClient({ adapter } as any);
 
 // ---------------------------------------------------------------------------
-// Tab keys — must match the route segments in src/app/(dashboard)/
+// Tab keys — must match route segments in src/app/(dashboard)/
 // ---------------------------------------------------------------------------
 
 const ALL_TABS = [
-  "dashboard",
-  "cashflow",
-  "properties",
-  "investors",
-  "reports",
-  "insights",
-  "expenses",
-  "payouts",
-  "bookings",
-  "crm",
-  "dailyexp",
-  "utils",
+  "dashboard", "cashflow", "properties", "investors",
+  "reports", "insights", "expenses", "payouts",
+  "bookings", "crm", "dailyexp", "utils",
 ] as const;
 
 type TabKey = (typeof ALL_TABS)[number];
+type CrudMap = { create: boolean; read: boolean; update: boolean; delete: boolean };
 
 // ---------------------------------------------------------------------------
 // Permission builders
 // ---------------------------------------------------------------------------
 
-function buildSuperAdminTabPermissions(): Record<TabKey, boolean> {
-  return Object.fromEntries(ALL_TABS.map((tab) => [tab, true])) as Record<
-    TabKey,
-    boolean
-  >;
+function allTabsVisible(): Record<TabKey, boolean> {
+  return Object.fromEntries(ALL_TABS.map((t) => [t, true])) as Record<TabKey, boolean>;
 }
 
-function buildSuperAdminCrudPermissions(): Record<
-  TabKey,
-  { create: boolean; read: boolean; update: boolean; delete: boolean }
-> {
+function allTabsCrud(): Record<TabKey, CrudMap> {
   return Object.fromEntries(
-    ALL_TABS.map((tab) => [
-      tab,
-      { create: true, read: true, update: true, delete: true },
-    ])
-  ) as Record<
-    TabKey,
-    { create: boolean; read: boolean; update: boolean; delete: boolean }
-  >;
+    ALL_TABS.map((t) => [t, { create: true, read: true, update: true, delete: true }])
+  ) as Record<TabKey, CrudMap>;
+}
+
+/** Admin: only Daily Expenses and Bookings visible + full CRUD on those two.
+ *  All other tabs hidden and no CRUD access.
+ *  Per v3 plan Section 7 — Open Decision #2: confirm with business owner. */
+function adminTabPermissions(): Record<TabKey, boolean> {
+  return Object.fromEntries(
+    ALL_TABS.map((t) => [t, t === "dailyexp" || t === "bookings"])
+  ) as Record<TabKey, boolean>;
+}
+
+function adminCrudPermissions(): Record<TabKey, CrudMap> {
+  const full: CrudMap = { create: true, read: true, update: true, delete: true };
+  const none: CrudMap = { create: false, read: false, update: false, delete: false };
+  return Object.fromEntries(
+    ALL_TABS.map((t) => [t, t === "dailyexp" || t === "bookings" ? full : none])
+  ) as Record<TabKey, CrudMap>;
 }
 
 // ---------------------------------------------------------------------------
-// Env var validation
+// Env helpers
 // ---------------------------------------------------------------------------
 
 function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value || value.trim() === "") {
-    throw new Error(
-      `[seed] Missing required environment variable: ${name}\n` +
-        `Set it in .env.local before running the seed script.`
-    );
-  }
-  return value.trim();
+  const v = process.env[name];
+  if (!v?.trim()) throw new Error(`[seed] Missing env var: ${name}`);
+  return v.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -106,65 +85,40 @@ function requireEnv(name: string): string {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  console.log("[seed] Starting SuperAdmin seed...");
+  console.log("[seed] Starting...");
 
   const username = requireEnv("SEED_SUPERADMIN_USERNAME");
   const plaintextPassword = requireEnv("SEED_SUPERADMIN_PASSWORD");
-  const bcryptRounds = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
+  const rounds = parseInt(process.env.BCRYPT_ROUNDS ?? "12", 10);
 
-  if (isNaN(bcryptRounds) || bcryptRounds < 10 || bcryptRounds > 15) {
-    throw new Error(
-      `[seed] BCRYPT_ROUNDS must be between 10 and 15. Got: ${process.env.BCRYPT_ROUNDS}`
-    );
-  }
-
-  console.log(`[seed] Hashing password (bcrypt rounds: ${bcryptRounds})...`);
-  const passwordHash = await bcrypt.hash(plaintextPassword, bcryptRounds);
-
-  console.log("[seed] Upserting SuperAdmin role...");
+  // -- SuperAdmin role --
   const superAdminRole = await prisma.role.upsert({
     where: { name: "SuperAdmin" },
-    update: {
-      tab_permissions: buildSuperAdminTabPermissions(),
-      crud_permissions: buildSuperAdminCrudPermissions(),
-    },
-    create: {
-      name: "SuperAdmin",
-      tab_permissions: buildSuperAdminTabPermissions(),
-      crud_permissions: buildSuperAdminCrudPermissions(),
-    },
+    update: { tab_permissions: allTabsVisible(), crud_permissions: allTabsCrud() },
+    create: { name: "SuperAdmin", tab_permissions: allTabsVisible(), crud_permissions: allTabsCrud() },
   });
+  console.log(`[seed] SuperAdmin role — id: ${superAdminRole.id}`);
 
-  console.log(`[seed] SuperAdmin role ready — id: ${superAdminRole.id}`);
+  // -- Admin role --
+  const adminRole = await prisma.role.upsert({
+    where: { name: "Admin" },
+    update: { tab_permissions: adminTabPermissions(), crud_permissions: adminCrudPermissions() },
+    create: { name: "Admin", tab_permissions: adminTabPermissions(), crud_permissions: adminCrudPermissions() },
+  });
+  console.log(`[seed] Admin role — id: ${adminRole.id}`);
 
-  console.log(`[seed] Upserting SuperAdmin user: "${username}"...`);
+  // -- SuperAdmin user --
+  const passwordHash = await bcrypt.hash(plaintextPassword, rounds);
   const superAdminUser = await prisma.user.upsert({
     where: { username },
-    update: {
-      password_hash: passwordHash,
-      role_id: superAdminRole.id,
-    },
-    create: {
-      username,
-      password_hash: passwordHash,
-      role_id: superAdminRole.id,
-    },
+    update: { password_hash: passwordHash, role_id: superAdminRole.id },
+    create: { username, password_hash: passwordHash, role_id: superAdminRole.id },
   });
+  console.log(`[seed] SuperAdmin user "${superAdminUser.username}" — id: ${superAdminUser.id}`);
 
-  console.log(`[seed] SuperAdmin user ready — id: ${superAdminUser.id}`);
-  console.log("[seed] Done. SuperAdmin can now log in at /login.");
+  console.log("[seed] Done.");
 }
 
-// ---------------------------------------------------------------------------
-// Run
-// ---------------------------------------------------------------------------
-
 main()
-  .catch((err: unknown) => {
-    console.error("[seed] Fatal error:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-    await pool.end();
-  });
+  .catch((err: unknown) => { console.error("[seed] Fatal:", err); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); await pool.end(); });
