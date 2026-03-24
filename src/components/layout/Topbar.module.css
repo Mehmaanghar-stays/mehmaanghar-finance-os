@@ -1,0 +1,132 @@
+/* src/components/layout/Topbar.module.css
+ *
+ * Verbatim port of all .topbar, .tb-*, and .btn* rules from mg-finance-os.html.
+ * Uses var(--bdr), var(--or), var(--orp), var(--orl), var(--s2), var(--t2),
+ * var(--rdp), var(--rd), var(--gr) — all defined in globals.css.
+ *
+ * NOTE: font-family 'Playfair Display' and 'Sora' must be loaded in the root
+ * layout.tsx via Next.js next/font or a <link> to Google Fonts.
+ */
+
+/* ── Topbar shell ─────────────────────────────────────────────────────────── */
+
+.topbar {
+  background: #fff;
+  border-bottom: 1px solid var(--bdr);
+  padding: 0 24px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+/* ── Left / right containers ─────────────────────────────────────────────── */
+
+.tb-l {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tb-r {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* ── Logo image ─────────────────────────────────────────────────────────── */
+
+/* Applied to the Next.js <Image> element via className */
+.tb-logo {
+  height: 34px;
+  width: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* ── Page title ─────────────────────────────────────────────────────────── */
+
+.tb-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+/* ── Period badge (pgBadge) ─────────────────────────────────────────────── */
+/* Shows current period, e.g. "January 2025". Wired to Zustand in Run 3.     */
+
+.tb-badge {
+  background: var(--orp);
+  color: var(--or);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* Shared button classes                                                       */
+/* Used throughout the app. Placed here because Topbar is the first consumer. */
+/* Other components import these via Topbar.module.css or a future shared     */
+/* buttons.module.css when the number of consumers warrants splitting.        */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: 'Sora', sans-serif;
+  transition: all .14s;
+  white-space: nowrap;
+}
+
+/* Ghost / secondary */
+.btn-g {
+  background: var(--s2);
+  color: var(--t2);
+}
+
+.btn-g:hover {
+  background: var(--bdr);
+}
+
+/* Primary / orange */
+.btn-or {
+  background: var(--or);
+  color: #fff;
+}
+
+.btn-or:hover {
+  background: var(--orl);
+}
+
+/* Danger / red */
+.btn-rd {
+  background: var(--rdp);
+  color: var(--rd);
+}
+
+/* Green (used in Payout Ledger, included here for completeness) */
+.btn-gr {
+  background: var(--gr);
+  color: #fff;
+}
+
+.btn-gr:hover {
+  background: #15803d;
+}
+
+/* Small size modifier — overrides padding and font-size */
+.btn-sm {
+  padding: 5px 11px;
+  font-size: 11.5px;
+}

@@ -1,0 +1,78 @@
+/* src/components/layout/PeriodBar.module.css
+ *
+ * Verbatim port of .pbar, .plbl, .fsel, .fdiv rules from mg-finance-os.html.
+ * The .pbar rule in the HTML also has a responsive override (flex-wrap:wrap;
+ * row-gap:6px) in the @media block — included here as base since the app
+ * always needs wrapping on smaller viewports.
+ *
+ * Uses CSS variables defined in globals.css:
+ *   --bdr, --or, --bg, --tx, --t3
+ */
+
+.pbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  background: #fff;
+  border: 1px solid var(--bdr);
+  border-radius: var(--r);
+  padding: 11px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--sh1);
+}
+
+.plbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t2);
+}
+
+.fsel {
+  background: var(--s2);
+  border: 1px solid var(--bdr);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--tx);
+  font-family: 'Sora', sans-serif;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .14s;
+}
+
+.fsel:focus {
+  border-color: var(--or);
+}
+
+/* month-type input needs slightly different padding — matches HTML inline style */
+.fsel-month {
+  min-width: 130px;
+  cursor: pointer;
+  padding: 5px 10px;
+}
+
+/* date input — matches HTML inline style on sDay */
+.fsel-date {
+  padding: 5px 9px;
+}
+
+.fdiv {
+  width: 1px;
+  height: 20px;
+  background: var(--bdr);
+}
+
+/* "to" label between custom range date inputs */
+.range-sep {
+  font-size: 11px;
+  color: var(--t3);
+}
+
+/* Inline control group — replaces the HTML <span id="ctrl-*"> elements */
+.ctrl-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}

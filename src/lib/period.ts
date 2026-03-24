@@ -5,7 +5,7 @@
 // Global DOM/state reads replaced with explicit parameters (see TYPING NOTES).
 // DO NOT duplicate any period or filter logic outside this file.
 
-import { calcROI } from './finance.js';
+import { calcROI } from './finance';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

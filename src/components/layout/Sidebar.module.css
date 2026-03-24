@@ -1,0 +1,141 @@
+/* src/components/layout/Sidebar.module.css
+ *
+ * Verbatim port of all .sb*, .ni, and related rules from mg-finance-os.html.
+ * Uses var(--or) and other CSS variables defined in globals.css.
+ */
+
+.sb {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 230px;
+  height: 100vh;
+  background: #15130C;
+  display: flex;
+  flex-direction: column;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.sb-logo {
+  padding: 16px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .07);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 70px;
+}
+
+/* Applied to the <Image> element via className */
+.sb-logo-img {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.sb-txt {
+  line-height: 1.25;
+}
+
+.sb-txt strong {
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: block;
+}
+
+.sb-txt span {
+  color: rgba(255, 255, 255, .3);
+  font-size: 8.5px;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+}
+
+.sb-nav {
+  padding: 10px 8px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sb-sec {
+  margin-bottom: 18px;
+}
+
+.sb-lbl {
+  color: rgba(255, 255, 255, .25);
+  font-size: 9px;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  padding: 0 8px;
+  margin-bottom: 4px;
+}
+
+/* ── Nav item ─────────────────────────────────────────────────────────────── */
+
+.ni {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, .45);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all .14s;
+  margin-bottom: 1px;
+  user-select: none;
+  /* Reset <a> and <button> defaults */
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.ni:hover {
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .85);
+}
+
+/* Compound selector: element with both .ni and .active from this module */
+.ni.active {
+  background: var(--or);
+  color: #fff;
+  font-weight: 600;
+}
+
+.ni svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Pending badge (Payout Ledger) ───────────────────────────────────────── */
+
+.pending-badge {
+  background: #DC2626;
+  color: #fff;
+  border-radius: 20px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+
+.sb-foot {
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255, 255, 255, .06);
+  color: rgba(255, 255, 255, .25);
+  font-size: 8.5px;
+  line-height: 1.8;
+}
+
+.sb-foot a {
+  color: rgba(255, 255, 255, .38);
+  text-decoration: none;
+}
