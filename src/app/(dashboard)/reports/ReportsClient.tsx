@@ -16,6 +16,7 @@
 
 import { useState, useMemo } from 'react';
 import { usePeriod } from '@/hooks/usePeriod';
+import type { RepRow } from '@/lib/period';
 import { Pagination } from '@/components/ui/Pagination';
 import { DetailPanel } from '@/components/ui/DetailPanel';
 import { MonthlyEntryModal } from './MonthlyEntryModal';
@@ -88,7 +89,9 @@ export function ReportsClient({
 
   // ── Period-filtered + sorted reports ─────────────────────────────────────
   const filteredReps = useMemo(
-    () => getFilteredReps(reports as any, () => null),
+    // SerializableReport is structurally compatible with RepRow (same fields,
+    // minus the optional _autoGen flag). Cast is safe.
+    () => getFilteredReps(reports as RepRow[], () => null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [reports],
   );
@@ -385,7 +388,3 @@ function ReportSnapshot({
     </>
   );
 }
-
-// function fIN(n: number) {
-//   return '₹' + Math.round(n || 0).toLocaleString('en-IN');
-// }

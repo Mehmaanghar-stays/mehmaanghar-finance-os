@@ -87,7 +87,7 @@ export function InsightCharts({ radarData, radarRaw, adrTrend }: InsightChartsPr
         max: 100,
         grid:   { color: '#F1F0EC' },
         ticks:  { display: false, backdropColor: 'transparent', stepSize: 25 },
-        pointLabels: { font: { size: 10.5, weight: '600' as const } },
+        pointLabels: { font: { size: 10.5, weight: 600 } },
       },
     },
     plugins: {

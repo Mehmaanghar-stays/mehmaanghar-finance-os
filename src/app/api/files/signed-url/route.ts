@@ -41,7 +41,10 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<SignedUrlResponse | ErrorResponse>> {
   // proxy.ts guarantees authentication before this route is reached.
-  // No specific tab permission required — access is scoped to the file path.
+  // No specific tab permission required — any authenticated role may request
+  // a signed URL. The URL is scoped to a specific file path, not a tab.
+  // Decision: no assertPermission() call. If files are ever restricted to
+  // specific tabs, add assertPermission(role, tabKey, 'read') here.
   // Validate role header is present (belt-and-suspenders).
   const role = request.headers.get("x-user-role") ?? "";
   if (!role) {

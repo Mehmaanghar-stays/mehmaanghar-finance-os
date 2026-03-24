@@ -27,6 +27,9 @@ import { getRolePermissions } from '@/lib/permissions';
 import { PropertiesClient } from './PropertiesClient';
 import type { SerializableReport } from '../dashboard/page';
 
+// Re-export for PropertiesClient.tsx which imports from './page'
+export type { SerializableReport };
+
 // ---------------------------------------------------------------------------
 // Serializable property type
 // ---------------------------------------------------------------------------

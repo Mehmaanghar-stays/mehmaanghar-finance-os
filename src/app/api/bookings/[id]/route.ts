@@ -127,10 +127,10 @@ export async function PATCH(
     updateData.room_amount =
       typeof body.room_amount === "number" ? body.room_amount : null;
   if (body.guest_id !== undefined)
-    updateData.guest_id =
+    updateData.guest =
       typeof body.guest_id === "string" && body.guest_id.trim()
-        ? body.guest_id.trim()
-        : null;
+        ? { connect: { id: body.guest_id.trim() } }
+        : { disconnect: true };
   if (body.booking_type !== undefined)
     updateData.booking_type =
       typeof body.booking_type === "string"

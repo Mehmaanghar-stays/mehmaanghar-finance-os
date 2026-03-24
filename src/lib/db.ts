@@ -46,8 +46,12 @@ function createPrismaClient(): PrismaClient {
   const pool = new Pool({ connectionString });
   const adapter = new PrismaPg(pool);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return new PrismaClient({ adapter } as any);
+  // Pool type from @types/pg conflicts with the bundled @types/pg inside
+  // @prisma/adapter-pg. The adapter IS compatible at runtime; this cast
+  // bridges the structural mismatch between the two @types/pg versions.
+  return new PrismaClient({
+    adapter,
+  } as unknown as ConstructorParameters<typeof PrismaClient>[0]);
 }
 
 // ---------------------------------------------------------------------------

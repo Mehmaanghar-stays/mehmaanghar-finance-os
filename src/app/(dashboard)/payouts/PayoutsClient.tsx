@@ -13,12 +13,9 @@
 // HTML payout fields vs DB Payout model:
 //   HTML.status    → derived: amount_paid IS NOT NULL → 'paid', else 'pending'
 //   HTML.paidDate  → paid_on (DateTime @db.Date), serialised to YYYY-MM-DD
-//   HTML.ref       → NOT IN SCHEMA — needs migration (add `reference String?`)
+//   HTML.ref       → reference (String?) — added in add_phase6_fields migration
 //   HTML.repId     → NOT IN SCHEMA — v1 omits this (links payout to report)
 //   HTML.amount    → amount_owed (Decimal)
-//
-// Until the `reference` field is migrated, the Ref column shows '—'.
-// The migration will be documented in the Phase 5 evaluation.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useMemo, useTransition } from 'react';
@@ -368,8 +365,7 @@ export function PayoutsClient({
                           {pay.paidOn ?? '—'}
                         </td>
                         <td style={{ fontSize: '11px', color: 'var(--t2)' }}>
-                          {/* reference field not yet in schema — shows '—' until migration */}
-                          {(pay as any).reference ?? '—'}
+                          {pay.reference ?? '—'}
                         </td>
                         <td style={{ fontSize: '11px', color: 'var(--t3)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {pay.notes ?? ''}

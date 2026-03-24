@@ -102,14 +102,24 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
 
   // ── Per-guest period metrics map ──────────────────────────────────────────
   const guestPeriodMap = useMemo(() => {
-    const m: Record<string, { stays: number; nights: number; spend: number; ratings: number[] }> = {};
+    const raw: Record<string, { stays: number; nights: number; spend: number; ratings: number[] }> = {};
     periodBks.forEach((b) => {
       if (!b.guestId) return;
-      if (!m[b.guestId]) m[b.guestId] = { stays: 0, nights: 0, spend: 0, ratings: [] };
-      m[b.guestId].stays++;
-      m[b.guestId].nights += b.nights ?? 0;
-      m[b.guestId].spend  += b.revenue ?? 0;
+      if (!raw[b.guestId]) raw[b.guestId] = { stays: 0, nights: 0, spend: 0, ratings: [] };
+      raw[b.guestId].stays++;
+      raw[b.guestId].nights += b.nights ?? 0;
+      raw[b.guestId].spend  += b.revenue ?? 0;
     });
+    // Derive avgRating from ratings array so downstream consumers get { stays, nights, spend, avgRating }
+    const m: Record<string, { stays: number; nights: number; spend: number; avgRating: number }> = {};
+    for (const [gid, v] of Object.entries(raw)) {
+      m[gid] = {
+        stays: v.stays,
+        nights: v.nights,
+        spend: v.spend,
+        avgRating: v.ratings.length ? v.ratings.reduce((a, b) => a + b, 0) / v.ratings.length : 0,
+      };
+    }
     return m;
   }, [periodBks]);
 

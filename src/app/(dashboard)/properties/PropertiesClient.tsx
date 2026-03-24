@@ -147,7 +147,7 @@ export function PropertiesClient({
       commCustom: stdComms.includes(commStr) ? '' : commStr,
       address: p.address ?? '',
       capital: p.capital ? String(p.capital) : '',
-      assets: (p.assets ?? []).map((a, i) => ({ ...a, id: i + 1 })),
+      assets: (p.assets ?? []).map((a, i) => ({ ...a, id: i + 1, type: a.type as 'refundable' | 'recoverable' })),
     });
     setModalOpen(true);
   }

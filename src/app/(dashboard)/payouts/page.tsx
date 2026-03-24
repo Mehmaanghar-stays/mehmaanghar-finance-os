@@ -68,6 +68,8 @@ export interface SerializablePayout {
   status: 'pending' | 'paid';
   /** YYYY-MM-DD or null */
   paidOn: string | null;
+  /** Payment reference / UTR / transaction ID */
+  reference: string | null;
   notes: string | null;
 }
 
@@ -98,6 +100,7 @@ export default async function PayoutsPage() {
       amount_owed: true,
       amount_paid: true,
       paid_on:     true,
+      reference:   true,
       notes:       true,
       property:    { select: {
         name: true,
@@ -120,6 +123,7 @@ export default async function PayoutsPage() {
     amountOwed:   Number(p.amount_owed),
     status:       (p.amount_paid !== null && p.paid_on !== null) ? 'paid' : 'pending',
     paidOn:       p.paid_on ? p.paid_on.toISOString().split('T')[0] : null,
+    reference:    p.reference,
     notes:        p.notes,
   }));
 
