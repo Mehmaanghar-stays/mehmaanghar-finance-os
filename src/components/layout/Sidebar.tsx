@@ -9,23 +9,12 @@ import { NavItem } from './NavItem';
 import { LogoutButton } from './LogoutButton';
 import styles from './Sidebar.module.css';
 
-interface LinkNavItem {
-  type: 'link';
+interface NavItemDef {
   label: string;
   href: string;
   permKey: TabKey;
   icon: React.ReactNode;
 }
-
-interface ModalNavItem {
-  type: 'modal';
-  label: string;
-  modalId: string;
-  permKey: TabKey;
-  icon: React.ReactNode;
-}
-
-type NavItemDef = LinkNavItem | ModalNavItem;
 
 interface NavSection {
   label: string;
@@ -37,7 +26,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Overview',
     items: [
       {
-        type: 'link',
         label: 'Dashboard',
         href: '/dashboard',
         permKey: 'dashboard',
@@ -51,7 +39,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Cash Flow',
         href: '/cashflow',
         permKey: 'cashflow',
@@ -67,7 +54,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Management',
     items: [
       {
-        type: 'link',
         label: 'Properties',
         href: '/properties',
         permKey: 'properties',
@@ -78,7 +64,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Investors',
         href: '/investors',
         permKey: 'investors',
@@ -90,7 +75,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Reports',
         href: '/reports',
         permKey: 'reports',
@@ -102,7 +86,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Smart Insights',
         href: '/insights',
         permKey: 'insights',
@@ -114,7 +97,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Expense Intel',
         href: '/expenses',
         permKey: 'expenses',
@@ -125,7 +107,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Payout Ledger',
         href: '/payouts',
         permKey: 'payouts',
@@ -141,7 +122,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Daily Operations',
     items: [
       {
-        type: 'link',
         label: 'Daily Expenses',
         href: '/dailyexp',
         permKey: 'dailyexp',
@@ -153,7 +133,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Bookings',
         href: '/bookings',
         permKey: 'bookings',
@@ -164,7 +143,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'link',
         label: 'Guest CRM',
         href: '/crm',
         permKey: 'crm',
@@ -178,9 +156,10 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        type: 'modal',
+        // Monthly Entry is now a full page at /monthlyentry.
+        // permKey stays 'reports' — same tab permission gates this item.
         label: 'Monthly Entry',
-        modalId: 'monthlyModal',
+        href: '/monthlyentry',
         permKey: 'reports',
         icon: (
           <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -197,7 +176,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Utilities',
     items: [
       {
-        type: 'link',
         label: 'Rent & Utilities',
         href: '/utils',
         permKey: 'utils',
@@ -214,7 +192,6 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'System',
     items: [
       {
-        type: 'link',
         label: 'User Management',
         href: '/users',
         permKey: 'users',
@@ -278,24 +255,16 @@ export async function Sidebar() {
               <div className={styles['sb-lbl']}>{section.label}</div>
 
               {visibleItems.map((item) => {
-                if (item.type === 'link') {
-                  const showBadge = item.permKey === 'payouts' && pendingPayoutCount > 0;
-                  return (
-                    <NavItem key={item.href} href={item.href}>
-                      {item.icon}
-                      {item.label}
-                      {showBadge && (
-                        <span className={styles['pending-badge']}>
-                          {pendingPayoutCount}
-                        </span>
-                      )}
-                    </NavItem>
-                  );
-                }
+                const showBadge = item.permKey === 'payouts' && pendingPayoutCount > 0;
                 return (
-                  <NavItem key={item.modalId} modalId={item.modalId}>
+                  <NavItem key={item.href} href={item.href}>
                     {item.icon}
                     {item.label}
+                    {showBadge && (
+                      <span className={styles['pending-badge']}>
+                        {pendingPayoutCount}
+                      </span>
+                    )}
                   </NavItem>
                 );
               })}

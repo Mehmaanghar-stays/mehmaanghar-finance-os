@@ -4,7 +4,11 @@
 // Fetches Report rows + Property rows; passes them to <ReportsClient />.
 //
 // HTML source: <div class="page" id="page-reports"> + rndReports()
-//              + saveMonthlyBulk() + initMmModal()
+//
+// Monthly Entry is now a standalone page at /monthlyentry.
+// The canMonthlyEntry prop and related permission check have been removed.
+// Properties are still fetched here for the snapshot detail panel's property
+// name display and commission lookup.
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -17,19 +21,15 @@ import type { SerializableProperty } from '../properties/page';
 
 export default async function ReportsPage() {
   // ── Session + permissions ─────────────────────────────────────────────────
-  const cookieName = process.env.COOKIE_NAME ?? 'mg_session';
+  const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
   const cookieStore = await cookies();
-  const token = cookieStore.get(cookieName)?.value ?? '';
-  const session = token ? await verifyToken(token) : null;
+  const token       = cookieStore.get(cookieName)?.value ?? '';
+  const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
   const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
+  const tabPerms  = rolePerms?.tabPermissions ?? {};
   if (tabPerms['reports'] !== true) redirect('/dashboard');
-
-  // 'Monthly Entry' nav item (Sidebar) is gated on reports create permission
-  const canMonthlyEntry = crudPerms['reports']?.create === true;
 
   // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({
@@ -62,7 +62,7 @@ export default async function ReportsPage() {
     }];
   });
 
-  // ── Fetch properties (for Monthly Entry modal + snapshot display) ──────────
+  // ── Fetch properties (for snapshot detail panel — property name + commission) ──
   const rawProps = await prisma.property.findMany({
     select: { id: true, name: true, address: true },
     orderBy: { name: 'asc' },
@@ -71,13 +71,13 @@ export default async function ReportsPage() {
   const properties: SerializableProperty[] = rawProps.map((p) => ({
     id:      p.id,
     name:    p.name,
-    city:    (p as Record<string, unknown>).city   as string ?? '',
-    state:   (p as Record<string, unknown>).state  as string ?? '',
-    comm:    Number((p as Record<string, unknown>).comm)     || 25,
-    capital: Number((p as Record<string, unknown>).capital)  || 0,
+    city:    (p as Record<string, unknown>).city  as string ?? '',
+    state:   (p as Record<string, unknown>).state as string ?? '',
+    comm:    Number((p as Record<string, unknown>).comm)    || 25,
+    capital: Number((p as Record<string, unknown>).capital) || 0,
     address: p.address,
-    type:    (p as Record<string, unknown>).type   as string ?? '',
-    rooms:   Number((p as Record<string, unknown>).rooms)    || 0,
+    type:    (p as Record<string, unknown>).type  as string ?? '',
+    rooms:   Number((p as Record<string, unknown>).rooms)   || 0,
     assets:  ((p as Record<string, unknown>).assets as SerializableProperty['assets']) ?? [],
   }));
 
@@ -85,7 +85,6 @@ export default async function ReportsPage() {
     <ReportsClient
       reports={reports}
       properties={properties}
-      canMonthlyEntry={canMonthlyEntry}
     />
   );
 }

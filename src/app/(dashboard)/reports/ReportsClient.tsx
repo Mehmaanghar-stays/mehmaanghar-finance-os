@@ -1,7 +1,7 @@
 'use client';
 // src/app/(dashboard)/reports/ReportsClient.tsx
 //
-// Client Component. Three sections, pixel-matched to the HTML:
+// Client Component. Two sections, pixel-matched to the HTML:
 //
 //  1. Collapsible report list (toggleRepList + rndReports)
 //     - Period-filtered, sorted newest-first, paginated (PAGE_SIZE=20)
@@ -11,15 +11,15 @@
 //  2. Generate Reports card grid (6 export-type cards)
 //     - Each calls POST /api/exports — wired in Phase 6 API layer
 //
-//  3. Monthly Entry modal (MonthlyEntryModal) triggered from here
-//     and also from the Sidebar's Monthly Entry nav item
+// Monthly Entry is now a standalone page at /monthlyentry.
+// All MonthlyEntryModal state, the canMonthlyEntry prop, MonthlyEntryModalTrigger,
+// and the window.__openMonthlyEntry global have been removed from this file.
 
 import { useState, useMemo } from 'react';
 import { usePeriod } from '@/hooks/usePeriod';
 import type { RepRow } from '@/lib/period';
 import { Pagination } from '@/components/ui/Pagination';
 import { DetailPanel } from '@/components/ui/DetailPanel';
-import { MonthlyEntryModal } from './MonthlyEntryModal';
 import type { SerializableReport } from '../dashboard/page';
 import type { SerializableProperty } from '../properties/page';
 
@@ -60,7 +60,6 @@ const EXPORT_CARDS = [
 interface ReportsClientProps {
   reports: SerializableReport[];
   properties: SerializableProperty[];
-  canMonthlyEntry: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +69,6 @@ interface ReportsClientProps {
 export function ReportsClient({
   reports,
   properties,
-  canMonthlyEntry,
 }: ReportsClientProps) {
   const { getFilteredReps } = usePeriod();
 
@@ -79,7 +77,6 @@ export function ReportsClient({
   const [page, setPage]                 = useState(1);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotRep, setSnapshotRep]   = useState<SerializableReport | null>(null);
-  const [monthlyOpen, setMonthlyOpen]   = useState(false);
 
   // ── Property lookup ───────────────────────────────────────────────────────
   const propMap = useMemo(
@@ -239,27 +236,6 @@ export function ReportsClient({
         ))}
       </div>
 
-      {/* ══ Monthly Entry Modal ════════════════════════════════════════════ */}
-      {canMonthlyEntry && (
-        <>
-          {/*
-           * Hidden trigger button — the Sidebar's Monthly Entry nav item
-           * dispatches a CustomEvent('openMonthlyEntry') on click (wired
-           * in Run 17). This listener catches it and opens the modal.
-           * Alternatively, the button can be programmatically clicked.
-           */}
-          <MonthlyEntryModalTrigger
-            open={monthlyOpen}
-            onOpen={() => setMonthlyOpen(true)}
-          />
-          <MonthlyEntryModal
-            isOpen={monthlyOpen}
-            onClose={() => setMonthlyOpen(false)}
-            properties={properties}
-          />
-        </>
-      )}
-
       {/* ══ Report Snapshot Detail Panel ═══════════════════════════════════ */}
       <DetailPanel
         isOpen={snapshotOpen}
@@ -280,31 +256,6 @@ export function ReportsClient({
 }
 
 // ---------------------------------------------------------------------------
-// MonthlyEntryModalTrigger — registers the CustomEvent listener so the
-// Sidebar nav item can open the modal without a prop-drilling chain.
-// ---------------------------------------------------------------------------
-
-function MonthlyEntryModalTrigger({
-  open,
-  onOpen,
-}: {
-  open: boolean;
-  onOpen: () => void;
-}) {
-  // Register the listener once on mount
-  if (typeof window !== 'undefined') {
-    window.__openMonthlyEntry = onOpen;
-  }
-  return null;
-}
-
-declare global {
-  interface Window {
-    __openMonthlyEntry?: () => void;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // ReportSnapshot — verbatim port of showReportSnapshot() panel body
 // ---------------------------------------------------------------------------
 
@@ -318,15 +269,15 @@ function ReportSnapshot({
   const prop = propMap[rep.pid];
 
   const KPI_ROWS = [
-    { l: 'Revenue',                        v: fIN(rep.rev),          c: 'var(--tx)' },
-    { l: 'Expenses',                       v: fIN(rep.exp),          c: 'var(--rd)' },
-    { l: 'Op. Profit',                     v: fIN(rep.opProfit),     c: 'var(--gr)' },
-    { l: `Commission (${prop?.comm ?? 25}%)`, v: fIN(rep.commission), c: 'var(--or)' },
-    { l: 'Investor Net',                   v: fIN(rep.invProfit),    c: 'var(--bl)' },
-    { l: 'Occupancy',                      v: (rep.occ ?? 0) + '%', c: 'var(--go)' },
-    { l: 'ROI',                            v: (rep.roi ?? 0) + '%', c: 'var(--or)' },
-    { l: 'ADR',                            v: fIN(rep.adr ?? 0),    c: 'var(--tx)' },
-    { l: 'RevPAR',                         v: fIN(rep.revpar ?? 0), c: 'var(--gr)' },
+    { l: 'Revenue',                           v: fIN(rep.rev),          c: 'var(--tx)' },
+    { l: 'Expenses',                          v: fIN(rep.exp),          c: 'var(--rd)' },
+    { l: 'Op. Profit',                        v: fIN(rep.opProfit),     c: 'var(--gr)' },
+    { l: `Commission (${prop?.comm ?? 25}%)`, v: fIN(rep.commission),   c: 'var(--or)' },
+    { l: 'Investor Net',                      v: fIN(rep.invProfit),    c: 'var(--bl)' },
+    { l: 'Occupancy',                         v: (rep.occ ?? 0) + '%', c: 'var(--go)' },
+    { l: 'ROI',                               v: (rep.roi ?? 0) + '%', c: 'var(--or)' },
+    { l: 'ADR',                               v: fIN(rep.adr ?? 0),    c: 'var(--tx)' },
+    { l: 'RevPAR',                            v: fIN(rep.revpar ?? 0), c: 'var(--gr)' },
   ];
 
   return (

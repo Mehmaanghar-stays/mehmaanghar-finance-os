@@ -1,40 +1,39 @@
 'use client';
-// src/app/(dashboard)/reports/MonthlyEntryModal.tsx
+// src/app/(dashboard)/monthlyentry/MonthlyEntryClient.tsx
 //
-// Monthly Data Entry modal. Pixel-matches the HTML monthlyModal exactly.
-// Channels: Airbnb, Booking.com, MakeMyTrip, Direct, Goibibo, OYO, Other
-// Expense categories: free-text rows, dynamic add/remove.
+// Monthly Entry — full-page Client Component.
 //
-// On save → POST /api/monthly-entry
-// The API (Phase 6) creates one Booking per channel and one DailyExpense
-// per category in a single transaction, then triggers report regeneration.
+// Ported from src/app/(dashboard)/reports/MonthlyEntryModal.tsx.
+// All logic is identical; the modal wrapper (Modal, isOpen, onClose) is
+// replaced with the standard dashboard page structure used by every other
+// page in the project.
 //
-// Source: <div class="ov" id="monthlyModal"> + saveMonthlyBulk() + initMmModal()
+// HTML source: <div class="ov" id="monthlyModal"> + saveMonthlyBulk()
+//              + initMmModal() + addMmChannel() + updMmTotals()
+//
+// On save:
+//   1. POST /api/monthly-entry (unchanged API route)
+//   2. Sync period bar to saved month/year via usePeriod.setPeriod
+//      (mirrors saveMonthlyBulk() setting cM=month; cY=year in the HTML)
+//   3. Navigate to /reports via useRouter
+//   4. Show success toast
+//
+// Absolute rules observed:
+//   - No formula logic — calls POST /api/monthly-entry only
+//   - No @supabase/supabase-js imports
+//   - No localStorage for application data
+//   - No `any` types
+//   - No console.log
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import { usePeriod } from '@/hooks/usePeriod';
-import styles from '@/components/ui/ui.module.css';
 import type { SerializableProperty } from '../properties/page';
 
 // ---------------------------------------------------------------------------
-// Types
+// Constants — verbatim from the HTML source
 // ---------------------------------------------------------------------------
-
-interface ChannelRow {
-  id: number;
-  name: string;
-  nights: string;
-  revenue: string;
-}
-
-interface ExpCatRow {
-  id: number;
-  category: string;
-  amount: string;
-}
 
 // Verbatim channel options from addMmChannel() in the HTML
 const CHANNEL_OPTS = [
@@ -57,6 +56,30 @@ const YEARS = (() => {
   return Array.from({ length: 11 }, (_, i) => cy - 5 + i);
 })();
 
+// Month name array for toast message — index matches month number (1-based)
+const MN = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface ChannelRow {
+  id: number;
+  name: string;
+  nights: string;
+  revenue: string;
+}
+
+interface ExpCatRow {
+  id: number;
+  category: string;
+  amount: string;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function fIN(n: number) {
   return '₹' + Math.round(n || 0).toLocaleString('en-IN');
 }
@@ -65,26 +88,25 @@ function fIN(n: number) {
 // Props
 // ---------------------------------------------------------------------------
 
-interface MonthlyEntryModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+interface MonthlyEntryClientProps {
   properties: SerializableProperty[];
+  canCreate: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function MonthlyEntryModal({
-  isOpen,
-  onClose,
+export function MonthlyEntryClient({
   properties,
-}: MonthlyEntryModalProps) {
+  canCreate,
+}: MonthlyEntryClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { cM, cY } = usePeriod();
+  const { cM, cY, setPeriod } = usePeriod();
 
-  const [pid, setPid]               = useState('');
+  // ── Local state — mirrors initMmModal() ──────────────────────────────────
+  const [pid, setPid]               = useState(properties[0]?.id ?? '');
   const [month, setMonth]           = useState(cM);
   const [year, setYear]             = useState(cY);
   const [channels, setChannels]     = useState<ChannelRow[]>([]);
@@ -93,12 +115,10 @@ export function MonthlyEntryModal({
   const [isSaving, setIsSaving]     = useState(false);
   const [validation, setValidation] = useState<string[]>([]);
 
-  // ── Init on open — verbatim initMmModal() ────────────────────────────────
+  // ── Init on mount — verbatim initMmModal() ────────────────────────────────
+  // Uses an effect with an empty dep array (same as the modal's isOpen=true
+  // effect) so the form initialises once when the page loads.
   useEffect(() => {
-    if (!isOpen) return;
-    setMonth(cM);
-    setYear(cY);
-    setPid(properties[0]?.id ?? '');
     let c = 0;
     setChannels([
       { id: ++c, name: 'Airbnb', nights: '', revenue: '' },
@@ -108,15 +128,14 @@ export function MonthlyEntryModal({
       DEFAULT_EXP_CATS.map((cat) => ({ id: ++c, category: cat, amount: '' })),
     );
     setCounter(c);
-    setValidation([]);
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live totals ───────────────────────────────────────────────────────────
   const totRev    = channels.reduce((s, c) => s + (parseFloat(c.revenue) || 0), 0);
   const totNights = channels.reduce((s, c) => s + (parseInt(c.nights)   || 0), 0);
   const totExp    = expCats.reduce( (s, c) => s + (parseFloat(c.amount)  || 0), 0);
 
-  // ── Validation (verbatim updMmTotals() warnings) ─────────────────────────
+  // ── Validation — verbatim updMmTotals() warnings ─────────────────────────
   useEffect(() => {
     const warns: string[] = [];
     if (totRev > 0 && totNights <= 0)
@@ -158,10 +177,20 @@ export function MonthlyEntryModal({
     setExpCats((prev) => prev.filter((c) => c.id !== id));
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // ── Save — verbatim saveMonthlyBulk() logic ───────────────────────────────
   async function handleSave() {
-    if (!pid) { toast('Select a property', 'er'); return; }
-    if (!totRev && !totExp) { toast('Enter revenue or expense data', 'er'); return; }
+    if (!canCreate) {
+      toast('You do not have permission to create monthly entries', 'er');
+      return;
+    }
+    if (!pid) {
+      toast('Select a property', 'er');
+      return;
+    }
+    if (!totRev && !totExp) {
+      toast('Enter revenue or expense data', 'er');
+      return;
+    }
 
     const validChannels = channels.filter((c) => (parseFloat(c.revenue) || 0) > 0);
     const validExpCats  = expCats.filter(
@@ -190,19 +219,25 @@ export function MonthlyEntryModal({
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+        const err = await res.json().catch(() => ({})) as { error?: string };
         toast(err.error ?? 'Failed to save monthly data', 'er');
         return;
       }
 
-      const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      // ── Post-save: sync period bar to saved month/year ─────────────────
+      // Mirrors saveMonthlyBulk() in the HTML: cM = month; cY = year;
+      // setPeriod updates the Zustand store which PeriodBar reads from.
+      // cPType is set to 'monthly' so the bar switches to the matching view.
+      setPeriod({ cM: month, cY: year, cPType: 'monthly' });
+
       toast(
-        `✓ Monthly data saved for ${MS[month]} ${year} — ` +
+        `✓ Monthly data saved for ${MN[month]} ${year} — ` +
         `${validChannels.length} channels, ${validExpCats.length} expense categories`,
         'ok',
       );
-      onClose();
-      router.refresh();
+
+      // Navigate to Reports after save, same as other create-then-redirect pages
+      router.push('/reports');
     } catch {
       toast('Network error — please try again', 'er');
     } finally {
@@ -212,65 +247,80 @@ export function MonthlyEntryModal({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Monthly Data Entry"
-      subtitle="Add full month data — revenue channels + expense categories"
-      size="wide"
-    >
-      {/* Property + Month */}
-      <div className={styles.fg}>
-        <div className={styles.fl}>
-          <label>Property *</label>
-          <select
-            className={styles.fs}
-            value={pid}
-            onChange={(e) => setPid(e.target.value)}
-          >
-            {properties.length === 0
-              ? <option value="">No properties — add one first</option>
-              : properties.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-          </select>
-        </div>
-        <div className={styles.fl}>
-          <label>Month *</label>
-          <select
-            className={styles.fs}
-            value={month}
-            onChange={(e) => setMonth(+e.target.value)}
-          >
-            {MS_OPTS.map((m) => (
-              <option key={m.v} value={m.v}>{m.l}</option>
-            ))}
-          </select>
+    <>
+      {/* ── Page header — same pattern as DailyExpClient, BookingsClient ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div className="stl" style={{ marginBottom: 0 }}>
+          <div className="d" />Monthly Entry
         </div>
       </div>
 
-      {/* Year */}
-      <div className={styles.fg}>
-        <div className={styles.fl}>
-          <label>Year *</label>
-          <select
-            className={styles.fs}
-            value={year}
-            onChange={(e) => setYear(+e.target.value)}
-          >
-            {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
+      {/* ── Sub-title — mirrors modal subtitle ───────────────────────────── */}
+      <div style={{ fontSize: '12px', color: 'var(--t3)', marginBottom: '18px' }}>
+        Add full month data — revenue channels + expense categories
+      </div>
+
+      {/* ── Property + Month selectors ────────────────────────────────────── */}
+      <div className="cc" style={{ marginBottom: '14px', padding: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
+              Property *
+            </label>
+            <select
+              className="fs"
+              value={pid}
+              onChange={(e) => setPid(e.target.value)}
+            >
+              {properties.length === 0
+                ? <option value="">No properties — add one first</option>
+                : properties.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+            </select>
+          </div>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
+              Month *
+            </label>
+            <select
+              className="fs"
+              value={month}
+              onChange={(e) => setMonth(+e.target.value)}
+            >
+              {MS_OPTS.map((m) => (
+                <option key={m.v} value={m.v}>{m.l}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className={styles.fl}>
-          <label style={{ color: 'var(--t3)' }}>Booking Period</label>
-          <div style={{ fontSize: '12px', color: 'var(--t3)', padding: '9px 0' }}>
-            Auto-set to {String(month).padStart(2, '0')}/{year}
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
+              Year *
+            </label>
+            <select
+              className="fs"
+              value={year}
+              onChange={(e) => setYear(+e.target.value)}
+            >
+              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t3)', marginBottom: '5px' }}>
+              Booking Period
+            </label>
+            <div style={{ fontSize: '12px', color: 'var(--t3)', padding: '9px 0' }}>
+              Auto-set to {String(month).padStart(2, '0')}/{year}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ── Revenue — Channel Breakdown ─────────────────────────────────── */}
-      <div style={{ background: 'var(--grp)', borderRadius: '9px', padding: '12px', marginBottom: '12px' }}>
+      {/* ── Revenue — Channel Breakdown ──────────────────────────────────── */}
+      <div style={{ background: 'var(--grp)', borderRadius: '9px', padding: '12px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gr)' }}>
             REVENUE — CHANNEL BREAKDOWN
@@ -293,7 +343,7 @@ export function MonthlyEntryModal({
         {channels.map((ch) => (
           <div key={ch.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr .8fr 1fr auto', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
             <select
-              className={styles.fs}
+              className="fs"
               style={{ fontSize: '11px', padding: '5px 7px' }}
               value={ch.name}
               onChange={(e) => updateChannel(ch.id, 'name', e.target.value)}
@@ -301,7 +351,7 @@ export function MonthlyEntryModal({
               {CHANNEL_OPTS.map((o) => <option key={o}>{o}</option>)}
             </select>
             <input
-              className={styles.fi}
+              className="fi"
               type="number"
               placeholder="0"
               value={ch.nights}
@@ -309,7 +359,7 @@ export function MonthlyEntryModal({
               style={{ fontSize: '11px', padding: '5px 7px' }}
             />
             <input
-              className={styles.fi}
+              className="fi"
               type="number"
               placeholder="0"
               value={ch.revenue}
@@ -335,8 +385,8 @@ export function MonthlyEntryModal({
         </div>
       </div>
 
-      {/* ── Expenses — Category Breakdown ──────────────────────────────── */}
-      <div style={{ background: 'var(--rdp)', borderRadius: '9px', padding: '12px', marginBottom: '12px' }}>
+      {/* ── Expenses — Category Breakdown ────────────────────────────────── */}
+      <div style={{ background: 'var(--rdp)', borderRadius: '9px', padding: '12px', marginBottom: '14px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--rd)' }}>
             EXPENSES — CATEGORY BREAKDOWN
@@ -359,14 +409,14 @@ export function MonthlyEntryModal({
         {expCats.map((ec) => (
           <div key={ec.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr auto', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
             <input
-              className={styles.fi}
+              className="fi"
               placeholder="e.g. Rent, Cleaning"
               value={ec.category}
               onChange={(e) => updateExpCat(ec.id, 'category', e.target.value)}
               style={{ fontSize: '11px', padding: '5px 7px' }}
             />
             <input
-              className={styles.fi}
+              className="fi"
               type="number"
               placeholder="0"
               value={ec.amount}
@@ -391,31 +441,40 @@ export function MonthlyEntryModal({
         </div>
       </div>
 
-      {/* Validation — verbatim updMmTotals() warnings */}
+      {/* ── Validation warnings — verbatim updMmTotals() ─────────────────── */}
       {validation.length > 0 && (
-        <div style={{ background: 'var(--gop)', border: '1px solid var(--go)', borderRadius: '8px', padding: '8px 12px', marginBottom: '12px', fontSize: '11px', color: 'var(--go)' }}>
+        <div style={{ background: 'var(--gop)', border: '1px solid var(--go)', borderRadius: '8px', padding: '8px 12px', marginBottom: '14px', fontSize: '11px', color: 'var(--go)' }}>
           {validation.map((w, i) => <div key={i}>{w}</div>)}
         </div>
       )}
 
-      {/* Footer */}
-      <div className={styles.mf}>
+      {/* ── Action row ───────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
         <button
           type="button"
-          className={`${styles.mb} ${styles.can}`}
-          onClick={onClose}
+          className="btn btn-g"
+          style={{ flex: 1 }}
+          onClick={() => router.back()}
         >
           Cancel
         </button>
         <button
           type="button"
-          className={`${styles.mb} ${styles.sub}`}
+          className="btn btn-or"
+          style={{ flex: 2 }}
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !canCreate}
         >
           {isSaving ? 'Saving…' : 'Save Monthly Data'}
         </button>
       </div>
-    </Modal>
+
+      {/* Read-only notice when canCreate is false */}
+      {!canCreate && (
+        <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--t3)', textAlign: 'center' }}>
+          Your role does not have permission to create monthly entries.
+        </div>
+      )}
+    </>
   );
 }
