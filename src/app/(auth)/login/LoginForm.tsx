@@ -294,7 +294,11 @@ export default function LoginForm() {
 
           {/* Logo */}
           <div className="login-logo">
-            <div className="login-logo-mark">M</div>
+            <img
+              src="/logo.jpg"
+              alt="MehmanGhar Stays"
+              style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover' }}
+            />
             <div className="login-logo-text">
               <span className="login-logo-name">MehmanGhar</span>
               <span className="login-logo-sub">Finance OS</span>

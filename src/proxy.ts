@@ -110,7 +110,6 @@ export default async function proxy(request: NextRequest): Promise<NextResponse>
     ) {
       return rejectRequest(request, pathname, "Invalid token.");
     }
-    console.error("[proxy] JWT verification failed:", err);
     return rejectRequest(request, pathname, "Authentication error.");
   }
 

@@ -33,7 +33,7 @@ const prisma = new PrismaClient({ adapter } as any);
 const ALL_TABS = [
   "dashboard", "cashflow", "properties", "investors",
   "reports", "insights", "expenses", "payouts",
-  "bookings", "crm", "dailyexp", "utils",
+  "bookings", "crm", "dailyexp", "utils", "users",
 ] as const;
 
 type TabKey = (typeof ALL_TABS)[number];

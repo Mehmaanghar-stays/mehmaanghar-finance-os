@@ -1,14 +1,11 @@
 // prisma/schema.prisma
 // =============================================================================
 // MehmanGhar Financial OS — Prisma Schema
-// v3.0 — Phase 2
+// v3.0 — Phase 5 (updated with gap fields identified in Phase 5 evaluation)
 //
-// Prisma 7 changes reflected here:
-//   - datasource block has `provider` only — no `url` or `directUrl`.
-//     Connection URL lives in prisma.config.ts (Prisma CLI) and
-//     src/lib/db.ts via @prisma/adapter-pg (Next.js runtime).
+// Prisma 7 notes:
+//   - datasource block has `provider` only — url lives in prisma.config.ts.
 //   - generator uses `prisma-client` provider + `engineType = "client"`.
-//     This enables the Rust-free engine — no binary downloaded at install time.
 //
 // 11 tables:
 //   Auth / RBAC  : roles, users
@@ -16,6 +13,10 @@
 //   Finance      : daily_expenses, expenses, payouts
 //   Reporting    : reports
 //   Config       : utils_settings
+//
+// Migration history:
+//   20260322155931_init_schema  — initial schema (Phase 2)
+//   add_phase5_fields           — gap fields for Phase 6 API routes (Phase 5)
 // =============================================================================
 
 generator client {
@@ -74,6 +75,30 @@ model Property {
   name    String
   address String?
 
+  // ── Phase 5 gap fields ────────────────────────────────────────────────────
+  city    String  @default("")
+  state   String  @default("")
+
+  /// Commission % passed to calcF(). e.g. 25.000 = 25%.
+  /// Per v3 plan Section 4.2: calcCommission() uses Operating Profit, not Revenue.
+  comm    Decimal @db.Decimal(6, 3) @default(25)
+
+  /// Property-level capital base for ROI calculation.
+  /// calcROI() returns null (not 0) when this is zero — v3 plan Section 4.2.
+  capital Decimal @db.Decimal(14, 2) @default(0)
+
+  /// Property type label — e.g. "Apartment", "Villa", "Studio"
+  type    String  @default("")
+
+  /// Number of rooms
+  rooms   Int     @default(0)
+
+  /// Saved assets (security deposits, advances, furniture).
+  /// Shape: Array<{ name: string; amount: number; type: "refundable"|"recoverable" }>
+  /// These are NOT included in ROI or operating expenses.
+  assets  Json    @default("[]")
+  // ── End Phase 5 gap fields ─────────────────────────────────────────────────
+
   /// Supabase Storage path — future scope. Path only, not full URL (v3 plan Section 3.4).
   image_path String?
 
@@ -95,6 +120,11 @@ model Investor {
   property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
 
   name String
+
+  // ── Phase 5 gap fields ────────────────────────────────────────────────────
+  contact String?
+  email   String?
+  // ── End Phase 5 gap fields ─────────────────────────────────────────────────
 
   /// Used in calcROI(). Returns null (not 0) when zero — v3 plan Section 4.2.
   capital   Decimal @db.Decimal(14, 2)
@@ -118,7 +148,12 @@ model Guest {
   email       String?
   phone       String?
   nationality String?
-  notes       String?
+
+  // ── Phase 5 gap field ─────────────────────────────────────────────────────
+  city  String?
+  // ── End Phase 5 gap field ──────────────────────────────────────────────────
+
+  notes String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -142,6 +177,29 @@ model Booking {
   /// Stored (not computed) — used in ADR and RevPAR in calcF().
   nights  Int
   revenue Decimal @db.Decimal(14, 2)
+
+  // ── Phase 5 gap fields ────────────────────────────────────────────────────
+  /// Amount charged for the room component specifically.
+  room_amount  Decimal? @db.Decimal(14, 2)
+
+  /// "stay" | "event" | "dayuse" etc.
+  booking_type String?
+
+  /// For event bookings: event category label.
+  event_type   String?
+
+  /// For event bookings: number of guests.
+  event_guests Int?
+
+  /// Food/catering cost associated with the booking.
+  food_cost    Decimal? @db.Decimal(14, 2)
+
+  /// Additional services (e.g. "Airport transfer, Laundry").
+  services     String?
+
+  /// Guest rating 1–5 left after checkout.
+  rating       Int?
+  // ── End Phase 5 gap fields ─────────────────────────────────────────────────
 
   /// "Airbnb" | "Booking.com" | "Direct" | "MakeMyTrip" | etc.
   platform String?
@@ -218,6 +276,11 @@ model Payout {
   /// Actual amount paid. Null if unpaid.
   amount_paid Decimal?  @db.Decimal(14, 2)
   paid_on     DateTime? @db.Date
+
+  // ── Phase 5 gap field ─────────────────────────────────────────────────────
+  /// Payment reference number / UTR / transaction ID.
+  reference String?
+  // ── End Phase 5 gap field ──────────────────────────────────────────────────
 
   notes String?
 

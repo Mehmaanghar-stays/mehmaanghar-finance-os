@@ -34,7 +34,8 @@ export type TabKey =
   | "bookings"
   | "crm"
   | "dailyexp"
-  | "utils";
+  | "utils"
+  | "users";
 
 export type CrudAction = "create" | "read" | "update" | "delete";
 

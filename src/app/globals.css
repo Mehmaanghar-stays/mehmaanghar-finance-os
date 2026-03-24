@@ -352,6 +352,60 @@ tbody td {
 ::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 2px; }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
+/* 5b. SHARED GLOBAL UTILITY CLASSES                                          */
+/* These classes are used as plain className strings across many page          */
+/* components (not as CSS Module imports). They must live in globals.css.      */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* Filter select — used in table toolbar rows across all pages */
+.fsel {
+  border: 1.5px solid var(--bdr);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-family: 'Sora', sans-serif;
+  color: var(--tx);
+  background: #fff;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .14s;
+}
+.fsel:focus { border-color: var(--or); }
+
+/* Detail-panel KPI mini-grid — used inline in page Client Components */
+.dp-kpi {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+  margin-bottom: 16px;
+}
+.dp-k {
+  background: var(--bg);
+  border-radius: var(--rs);
+  padding: 11px 13px;
+  border: 1px solid var(--bdr);
+}
+.dp-kl {
+  font-size: 9px;
+  color: var(--t3);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  margin-bottom: 3px;
+}
+.dp-kv {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: normal;
+  font-variant-numeric: tabular-nums;
+}
+.dp-ks {
+  font-size: 10.5px;
+  color: var(--t3);
+  margin-top: 1px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
 /* 6. RESPONSIVE                                                               */
 /* Verbatim from the HTML @media block.                                       */
 /* ══════════════════════════════════════════════════════════════════════════ */

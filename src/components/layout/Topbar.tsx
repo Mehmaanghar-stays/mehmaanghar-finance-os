@@ -17,7 +17,6 @@
 // layout.tsx (next/font or Google Fonts <link>). These fonts are declared in
 // Topbar.module.css but the load must be initiated at the root level.
 
-import Image from 'next/image';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
@@ -68,13 +67,13 @@ export async function Topbar() {
          * Logo: same asset as Sidebar. Extract the base64 JPEG from the
          * original HTML and save it as public/logo.jpg before running the app.
          */}
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src="/logo.jpg"
           alt="MehmanGhar"
           width={34}
           height={34}
           className={styles['tb-logo']}
-          priority
         />
 
         {/* Page title — resolved from current pathname by the Client Component */}

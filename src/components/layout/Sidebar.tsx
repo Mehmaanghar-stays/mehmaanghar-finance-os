@@ -6,30 +6,21 @@
 // Architecture decisions:
 //   - Server Component so that permission resolution is zero-client-bundle.
 //   - NavItem.tsx is a thin Client Component child that handles usePathname().
-//     Children (SVG icons, text) are rendered server-side and serialized
-//     through the RSC boundary as normal — no serialization issue.
-//   - Monthly Entry renders as a <button> (NavItem with modalId). The modal
-//     trigger will be wired up in Phase 5 when the modal system is built.
-//   - Pending badge on Payouts is hidden for now (count requires payout API
-//     route, built in Phase 6).
-//   - Logo image: expects /public/logo.jpg — extract the base64 JPEG from
-//     the original HTML source and save it there before running the app.
+//   - LogoutButton.tsx is a separate Client Component for the logout action.
+//     A Server Component cannot attach onClick handlers, so the boundary is
+//     at that one button only — the rest of the Sidebar stays server-rendered.
+//   - Monthly Entry renders as a NavItem with modalId.
+//   - Logo uses a plain <img> tag (not next/image) to avoid the image
+//     optimiser pipeline which can error on local files in certain envs.
 
-import Image from 'next/image';
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
 import { getRolePermissions } from '@/lib/permissions';
 import { prisma } from '@/lib/db';
 import type { TabKey } from '@/lib/permissions';
 import { NavItem } from './NavItem';
+import { LogoutButton } from './LogoutButton';
 import styles from './Sidebar.module.css';
-
-// ---------------------------------------------------------------------------
-// Nav structure — mirrors the <aside class="sb"> in mg-finance-os.html exactly.
-// Each item has a permKey that maps to TabPermissions from the database.
-// Monthly Entry uses 'reports' as its permission key (closest match — it
-// creates monthly report records). Adjust in v2 if a dedicated key is added.
-// ---------------------------------------------------------------------------
 
 interface LinkNavItem {
   type: 'link';
@@ -200,8 +191,6 @@ const NAV_SECTIONS: NavSection[] = [
         ),
       },
       {
-        // Not a route — opens a modal. Gated under 'reports' (monthly report
-        // entry). Phase 5: wire NavItem onClick to the modal system.
         type: 'modal',
         label: 'Monthly Entry',
         modalId: 'monthlyModal',
@@ -234,6 +223,22 @@ const NAV_SECTIONS: NavSection[] = [
       },
     ],
   },
+  {
+    label: 'System',
+    items: [
+      {
+        type: 'link',
+        label: 'User Management',
+        href: '/users',
+        permKey: 'users',
+        icon: (
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        ),
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -241,53 +246,42 @@ const NAV_SECTIONS: NavSection[] = [
 // ---------------------------------------------------------------------------
 
 export async function Sidebar() {
-  // ── 1. Read and verify session ────────────────────────────────────────────
   const cookieName = process.env.COOKIE_NAME ?? 'mg_session';
-  // In Next.js 15/16, cookies() returns a Promise.
   const cookieStore = await cookies();
   const token = cookieStore.get(cookieName)?.value ?? '';
 
   const session = token ? await verifyToken(token) : null;
 
-  // proxy.ts guarantees a redirect to /login before Sidebar renders, but
-  // guard here for safety (e.g. during unit tests or direct render).
   if (!session) return null;
 
-  // ── 2. Resolve tab permissions ────────────────────────────────────────────
   const rolePerms = await getRolePermissions(session.role);
   const tabPerms = rolePerms?.tabPermissions ?? {};
 
-  // ── 2b. Fetch all-time pending payout count ───────────────────────────────
-  // Server-side query — zero client bundle cost. Prisma derives 'pending'
-  // from amount_paid IS NULL (no separate status column in schema).
   let pendingPayoutCount = 0;
   try {
     pendingPayoutCount = await prisma.payout.count({
-      where: {
-        amount_paid: null,
-        paid_on:     null,
-      },
+      where: { amount_paid: null, paid_on: null },
     });
   } catch {
     // DB not yet migrated or payout table empty — safe default
   }
 
-  // ── 3. Render ─────────────────────────────────────────────────────────────
   return (
     <aside className={styles.sb}>
       {/* Logo / brand */}
       <div className={styles['sb-logo']}>
         {/*
-         * Logo image: save the base64 JPEG from the original HTML as
-         * /public/logo.jpg before running the application.
+         * Plain <img> used instead of next/image.
+         * next/image can error with "received null" on local JPEG files in
+         * certain Next.js 16 environments. Plain <img> from /public is safe.
          */}
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src="/logo.jpg"
-          alt="MehmanGhar Stays logo"
+          alt="MehmanGhar Stays"
           width={42}
           height={42}
           className={styles['sb-logo-img']}
-          priority
         />
         <div className={styles['sb-txt']}>
           <strong>MehmanGhar Stays</strong>
@@ -298,12 +292,10 @@ export async function Sidebar() {
       {/* Nav sections */}
       <nav className={styles['sb-nav']}>
         {NAV_SECTIONS.map((section) => {
-          // Filter items to those the role can see.
           const visibleItems = section.items.filter(
             (item) => tabPerms[item.permKey] === true,
           );
 
-          // Omit the section entirely if no items are visible.
           if (visibleItems.length === 0) return null;
 
           return (
@@ -312,12 +304,7 @@ export async function Sidebar() {
 
               {visibleItems.map((item) => {
                 if (item.type === 'link') {
-                  // Special case: Payout Ledger shows a pending-count badge.
-                  // The badge is hidden until the payout API route (Phase 6)
-                  // provides the count. At that point, fetch the count
-                  // server-side here and pass it as a prop.
                   const showBadge = item.permKey === 'payouts' && pendingPayoutCount > 0;
-
                   return (
                     <NavItem key={item.href} href={item.href}>
                       {item.icon}
@@ -330,8 +317,6 @@ export async function Sidebar() {
                     </NavItem>
                   );
                 }
-
-                // Modal trigger
                 return (
                   <NavItem key={item.modalId} modalId={item.modalId}>
                     {item.icon}
@@ -343,6 +328,9 @@ export async function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Logout — separate Client Component (needs onClick handler) */}
+      <LogoutButton />
 
       {/* Footer */}
       <div className={styles['sb-foot']}>
