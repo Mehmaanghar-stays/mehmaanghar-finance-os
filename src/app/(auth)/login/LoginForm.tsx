@@ -1,17 +1,5 @@
 "use client";
 // src/app/(auth)/login/LoginForm.tsx
-// =============================================================================
-// MehmanGhar Financial OS — Login Form (Client Component)
-//
-// Design: dark charcoal background, orange (#F97316) brand accent, Sora font.
-// Pixel-matched to the original HTML login style.
-//
-// Behaviour:
-//   - POST /api/auth/login with { username, password }
-//   - On success: redirect to ?next param or /dashboard
-//   - On failure: show inline error message
-//   - Loading state disables inputs and button
-// =============================================================================
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -61,7 +49,6 @@ export default function LoginForm() {
 
   return (
     <>
-      {/* Global styles for Sora font + page reset */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&display=swap');
 
@@ -92,7 +79,6 @@ export default function LoginForm() {
           justify-content: center;
           padding: 24px;
           background: var(--bg-page);
-          /* Subtle radial glow behind the card */
           background-image: radial-gradient(ellipse 60% 50% at 50% 40%, rgba(249,115,22,0.07) 0%, transparent 70%);
         }
 
@@ -292,11 +278,12 @@ export default function LoginForm() {
       <div className="login-root">
         <div className="login-card">
 
-          {/* Logo */}
           <div className="login-logo">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/logo.jpg"
               alt="MehmanGhar Stays"
+              fetchPriority="high"
               style={{ width: '36px', height: '36px', borderRadius: '8px', objectFit: 'cover' }}
             />
             <div className="login-logo-text">
@@ -305,12 +292,10 @@ export default function LoginForm() {
             </div>
           </div>
 
-          {/* Heading */}
           <h1 className="login-heading">Welcome back</h1>
           <p className="login-subheading">Sign in to access your dashboard</p>
           <div className="login-divider" />
 
-          {/* Form */}
           <form onSubmit={handleSubmit} noValidate>
             <div className="field-group">
 
@@ -347,7 +332,6 @@ export default function LoginForm() {
 
             </div>
 
-            {/* Error */}
             {error && (
               <div className="error-box" role="alert">
                 <svg className="error-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -358,7 +342,6 @@ export default function LoginForm() {
               </div>
             )}
 
-            {/* Submit */}
             <button type="submit" className="login-btn" disabled={loading}>
               {loading ? (
                 <>

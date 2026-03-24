@@ -1,17 +1,4 @@
 // src/components/layout/Sidebar.tsx
-//
-// Server Component. Reads the JWT cookie, resolves role permissions, and
-// renders only the tabs the current user is allowed to see.
-//
-// Architecture decisions:
-//   - Server Component so that permission resolution is zero-client-bundle.
-//   - NavItem.tsx is a thin Client Component child that handles usePathname().
-//   - LogoutButton.tsx is a separate Client Component for the logout action.
-//     A Server Component cannot attach onClick handlers, so the boundary is
-//     at that one button only — the rest of the Sidebar stays server-rendered.
-//   - Monthly Entry renders as a NavItem with modalId.
-//   - Logo uses a plain <img> tag (not next/image) to avoid the image
-//     optimiser pipeline which can error on local files in certain envs.
 
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
@@ -241,21 +228,16 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Sidebar Server Component
-// ---------------------------------------------------------------------------
-
 export async function Sidebar() {
-  const cookieName = process.env.COOKIE_NAME ?? 'mg_session';
+  const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
   const cookieStore = await cookies();
-  const token = cookieStore.get(cookieName)?.value ?? '';
-
-  const session = token ? await verifyToken(token) : null;
+  const token       = cookieStore.get(cookieName)?.value ?? '';
+  const session     = token ? await verifyToken(token) : null;
 
   if (!session) return null;
 
   const rolePerms = await getRolePermissions(session.role);
-  const tabPerms = rolePerms?.tabPermissions ?? {};
+  const tabPerms  = rolePerms?.tabPermissions ?? {};
 
   let pendingPayoutCount = 0;
   try {
@@ -263,18 +245,12 @@ export async function Sidebar() {
       where: { amount_paid: null, paid_on: null },
     });
   } catch {
-    // DB not yet migrated or payout table empty — safe default
+    // Safe default — payout table may be empty
   }
 
   return (
     <aside className={styles.sb}>
-      {/* Logo / brand */}
       <div className={styles['sb-logo']}>
-        {/*
-         * Plain <img> used instead of next/image.
-         * next/image can error with "received null" on local JPEG files in
-         * certain Next.js 16 environments. Plain <img> from /public is safe.
-         */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/logo.jpg"
@@ -289,7 +265,6 @@ export async function Sidebar() {
         </div>
       </div>
 
-      {/* Nav sections */}
       <nav className={styles['sb-nav']}>
         {NAV_SECTIONS.map((section) => {
           const visibleItems = section.items.filter(
@@ -329,10 +304,8 @@ export async function Sidebar() {
         })}
       </nav>
 
-      {/* Logout — separate Client Component (needs onClick handler) */}
       <LogoutButton />
 
-      {/* Footer */}
       <div className={styles['sb-foot']}>
         MehmanGhar Stays Services Pvt. Ltd.<br />
         CIN: U55101MH2025PTC456442<br />

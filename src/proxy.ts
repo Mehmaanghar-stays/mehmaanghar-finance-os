@@ -48,7 +48,11 @@ function isPublicPath(pathname: string): boolean {
 // ---------------------------------------------------------------------------
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // Exclude Next.js internals AND all public static file extensions.
+  // Without this, /logo.jpg (and any other public assets) are intercepted by
+  // the JWT guard on a fresh incognito session — the browser receives a redirect
+  // to /login instead of the image file, so the logo never renders on the login page.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\.(?:jpg|jpeg|png|gif|webp|svg|ico|woff2?|ttf|otf|css|js)).*)"],
 };
 
 // ---------------------------------------------------------------------------
