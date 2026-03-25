@@ -6,9 +6,9 @@
 // Idempotent — safe to re-run at any time.
 //
 // Roles seeded:
-//   SuperAdmin — full access to all 12 tabs + user management
-//   Admin      — Daily Expenses + Bookings only (v3 plan Section 7,
-//                Open Decision #2: confirm tab scope with business owner)
+//   SuperAdmin — full access to all 14 tabs + user management
+//   Admin      — Daily Expenses + Bookings + Monthly Entry
+//                (v3 plan Section 7, sidebar audit Section 5)
 //
 // Usage: npx prisma db seed
 // =============================================================================
@@ -36,7 +36,7 @@ const prisma = new PrismaClient({
 const ALL_TABS = [
   "dashboard", "cashflow", "properties", "investors",
   "reports", "insights", "expenses", "payouts",
-  "bookings", "crm", "dailyexp", "utils", "users",
+  "bookings", "crm", "dailyexp", "monthlyentry", "utils", "users",
 ] as const;
 
 type TabKey = (typeof ALL_TABS)[number];
@@ -56,12 +56,12 @@ function allTabsCrud(): Record<TabKey, CrudMap> {
   ) as Record<TabKey, CrudMap>;
 }
 
-/** Admin: only Daily Expenses and Bookings visible + full CRUD on those two.
+/** Admin: Daily Expenses, Bookings, and Monthly Entry visible + full CRUD.
  *  All other tabs hidden and no CRUD access.
  *  Per v3 plan Section 7 — Open Decision #2: confirm with business owner. */
 function adminTabPermissions(): Record<TabKey, boolean> {
   return Object.fromEntries(
-    ALL_TABS.map((t) => [t, t === "dailyexp" || t === "bookings"])
+    ALL_TABS.map((t) => [t, t === "dailyexp" || t === "bookings" || t === "monthlyentry"])
   ) as Record<TabKey, boolean>;
 }
 
@@ -69,7 +69,7 @@ function adminCrudPermissions(): Record<TabKey, CrudMap> {
   const full: CrudMap = { create: true, read: true, update: true, delete: true };
   const none: CrudMap = { create: false, read: false, update: false, delete: false };
   return Object.fromEntries(
-    ALL_TABS.map((t) => [t, t === "dailyexp" || t === "bookings" ? full : none])
+    ALL_TABS.map((t) => [t, t === "dailyexp" || t === "bookings" || t === "monthlyentry" ? full : none])
   ) as Record<TabKey, CrudMap>;
 }
 

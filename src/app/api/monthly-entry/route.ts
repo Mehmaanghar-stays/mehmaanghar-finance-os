@@ -6,11 +6,12 @@
 //        category row) for a given property + month + year.
 //        Wraps both in a Prisma $transaction so the operation is atomic.
 //
-// Called by MonthlyEntryModal.tsx (Reports page).
+// Called by MonthlyEntryClient.tsx (Monthly Entry page).
 //
-// Permission: assertPermission(role, 'bookings', 'create')
-//             (Monthly entry creates bookings + expenses — bookings create
-//              is the minimum bar. Admin + SuperAdmin both have this.)
+// Permission: assertPermission(role, 'monthlyentry', 'create')
+//             (Monthly entry creates bookings + expenses. It has its own
+//              'monthlyentry' permission key per the sidebar navigation audit,
+//              fixing the triple permission mismatch with 'reports'/'bookings'.)
 //
 // No financial calculations — does not call finance.ts.
 // =============================================================================
@@ -148,7 +149,7 @@ export async function POST(
   const role = request.headers.get("x-user-role") ?? "";
 
   try {
-    await assertPermission(role, "bookings", "create");
+    await assertPermission(role, "monthlyentry", "create");
   } catch (err) {
     return handleError(err);
   }

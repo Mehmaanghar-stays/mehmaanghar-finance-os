@@ -34,6 +34,7 @@ export type TabKey =
   | "bookings"
   | "crm"
   | "dailyexp"
+  | "monthlyentry"
   | "utils"
   | "users";
 

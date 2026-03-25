@@ -60,25 +60,27 @@ const ALL_TAB_KEYS: TabKey[] = [
   'bookings',
   'crm',
   'dailyexp',
+  'monthlyentry',
   'utils',
   'users',
 ];
 
 /** Human-readable labels — matches Sidebar nav labels. */
 const TAB_LABELS: Record<TabKey, string> = {
-  dashboard:  'Dashboard',
-  cashflow:   'Cash Flow',
-  properties: 'Properties',
-  investors:  'Investors',
-  reports:    'Reports',
-  insights:   'Smart Insights',
-  expenses:   'Expense Intel',
-  payouts:    'Payout Ledger',
-  bookings:   'Bookings',
-  crm:        'Guest CRM',
-  dailyexp:   'Daily Expenses',
-  utils:      'Rent & Utilities',
-  users:      'User Management',
+  dashboard:     'Dashboard',
+  cashflow:      'Cash Flow',
+  properties:    'Properties',
+  investors:     'Investors',
+  reports:       'Reports',
+  insights:      'Smart Insights',
+  expenses:      'Expense Intel',
+  payouts:       'Payout Ledger',
+  bookings:      'Bookings',
+  crm:           'Guest CRM',
+  dailyexp:      'Daily Expenses',
+  monthlyentry:  'Monthly Entry',
+  utils:         'Rent & Utilities',
+  users:         'User Management',
 };
 
 const CRUD_ACTIONS: CrudAction[] = ['read', 'create', 'update', 'delete'];

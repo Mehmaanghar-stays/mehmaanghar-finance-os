@@ -45,10 +45,19 @@ const PATH_TO_MODEL: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+interface TopbarActionsProps {
+  role: string;
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function TopbarActions() {
+export function TopbarActions({ role }: TopbarActionsProps) {
+  const isSuperAdmin = role === 'SuperAdmin';
   const router   = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -256,6 +265,11 @@ export function TopbarActions() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  // All topbar action buttons (+ Property, + Investor, Backup, Restore,
+  // Export CSV) are SuperAdmin-only. Non-SuperAdmin users see only their
+  // username in the topbar.
+  if (!isSuperAdmin) return null;
+
   return (
     <>
       {/* ── Desktop: full buttons (hidden on mobile via CSS) ──────────── */}

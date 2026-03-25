@@ -1,8 +1,9 @@
 // src/app/(dashboard)/monthlyentry/page.tsx
 //
 // Monthly Entry page — Server Component shell.
-// SuperAdmin + Admin access; gated on the 'reports' tab permission
-// (same permission key that gated the former modal trigger in the Sidebar).
+// SuperAdmin + Admin access; gated on the 'monthlyentry' tab permission
+// (own permission key per sidebar navigation audit — fixes the triple
+// permission mismatch where this page formerly piggybacked on 'reports').
 //
 // HTML source: <div class="ov" id="monthlyModal"> + saveMonthlyBulk()
 //              + initMmModal() — now rendered as a full page instead of
@@ -35,13 +36,13 @@ export default async function MonthlyEntryPage() {
   const tabPerms  = rolePerms?.tabPermissions  ?? {};
   const crudPerms = rolePerms?.crudPermissions ?? {};
 
-  // Tab visibility guard — 'reports' permission gates this page, matching
-  // the permKey used in the Sidebar nav item.
-  if (tabPerms['reports'] !== true) redirect('/dashboard');
+  // Tab visibility guard — 'monthlyentry' permission gates this page,
+  // matching the permKey used in the Sidebar nav item.
+  if (tabPerms['monthlyentry'] !== true) redirect('/dashboard');
 
-  // CRUD guard — only roles with reports.create can save monthly data.
+  // CRUD guard — only roles with monthlyentry.create can save monthly data.
   // The client receives this flag and disables the save button accordingly.
-  const canCreate = crudPerms['reports']?.create === true;
+  const canCreate = crudPerms['monthlyentry']?.create === true;
 
   // ── Fetch properties ──────────────────────────────────────────────────────
   const rawProps = await prisma.property.findMany({
