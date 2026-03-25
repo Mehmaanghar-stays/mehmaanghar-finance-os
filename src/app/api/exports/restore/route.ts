@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole, RoleRequiredError } from "@/lib/permissions";
+import { regenReports } from "@/lib/regenReports";
 
 interface RestoreResult {
   table: string;
@@ -424,6 +425,15 @@ export async function POST(
   }
 
   const totalProcessed = results.reduce((s, r) => s + r.processed, 0);
+
+  // Regenerate all reports from restored ops data.
+  // Wrapped in try/catch — a partial restore (e.g. bookings without properties)
+  // may cause regen to skip some keys. Reports will self-correct on the next write.
+  try {
+    await regenReports();
+  } catch {
+    // Non-fatal: restore succeeded, reports will regenerate on next write
+  }
 
   return NextResponse.json({ results, total_processed: totalProcessed });
 }

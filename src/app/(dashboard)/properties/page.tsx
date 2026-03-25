@@ -72,15 +72,11 @@ export default async function PropertiesPage() {
   if (tabPerms['properties'] !== true) redirect('/dashboard');
 
   // ── Fetch properties ──────────────────────────────────────────────────────
-  // SCHEMA GAP: city, comm, state, capital, type, rooms, assets not yet in schema.
-  // After migration, add them to the select block here.
   const rawProps = await prisma.property.findMany({
     select: {
-      id: true,
-      name: true,
-      address: true,
-      // TODO after migration: city: true, state: true, comm: true,
-      //                       capital: true, type: true, rooms: true, assets: true
+      id: true, name: true, address: true,
+      city: true, state: true, comm: true,
+      capital: true, type: true, rooms: true, assets: true,
     },
     orderBy: { name: 'asc' },
   });
@@ -88,14 +84,14 @@ export default async function PropertiesPage() {
   const properties: SerializableProperty[] = rawProps.map((p) => ({
     id:      p.id,
     name:    p.name,
-    city:    (p as Record<string, unknown>).city   as string  ?? '',
-    state:   (p as Record<string, unknown>).state  as string  ?? '',
-    comm:    Number((p as Record<string, unknown>).comm)      || 25,
-    capital: Number((p as Record<string, unknown>).capital)   || 0,
+    city:    p.city ?? '',
+    state:   p.state ?? '',
+    comm:    Number(p.comm) || 25,
+    capital: Number(p.capital) || 0,
     address: p.address,
-    type:    (p as Record<string, unknown>).type   as string  ?? '',
-    rooms:   Number((p as Record<string, unknown>).rooms)     || 0,
-    assets:  ((p as Record<string, unknown>).assets as SerializableProperty['assets']) ?? [],
+    type:    p.type ?? '',
+    rooms:   Number(p.rooms) || 0,
+    assets:  (p.assets as SerializableProperty['assets']) ?? [],
   }));
 
   // ── Fetch report rows (for per-property period stats) ─────────────────────

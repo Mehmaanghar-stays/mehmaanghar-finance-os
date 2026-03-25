@@ -14,38 +14,6 @@
 //     <div class="cnt">
 //       <div class="pbar">    ← PeriodBar
 //       {children}            ← Page content
-//
-// ─── SCHEMA GAP — ACTION REQUIRED BEFORE RUN 8 ──────────────────────────
-//
-// The Property model (prisma/schema.prisma) is missing fields that the
-// original HTML uses extensively:
-//
-//   city    String   — city filter in PeriodBar + display in tables
-//   comm    Decimal  — commission % passed to calcF() in the financial engine
-//   state   String?  — state / region display
-//   capital Decimal  — capital base for ROI (currently on Investor, not Property)
-//   type    String?  — property type label
-//   rooms   Int?     — room count
-//
-// WITHOUT these fields:
-//   - The city filter in PeriodBar always shows "All Cities" with no options.
-//   - calcF() receives comm=0 for every property → all commissions are ₹0.
-//   - ROI is always N/A.
-//
-// Required migration (add before Run 8 — Properties page):
-//
-//   model Property {
-//     // ... existing fields ...
-//     city    String  @default("")
-//     comm    Decimal @db.Decimal(6, 3) @default(25)   // commission %
-//     state   String  @default("")
-//     capital Decimal @db.Decimal(14, 2) @default(0)
-//     type    String  @default("")
-//     rooms   Int     @default(0)
-//   }
-//
-// After adding these fields: run `prisma migrate dev` and update the seed.
-// ─────────────────────────────────────────────────────────────────────────
 
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
@@ -79,37 +47,16 @@ export default async function DashboardLayout({
   if (!session) redirect('/login');
 
   // ── 2. Fetch data for PeriodBar ───────────────────────────────────────────
-  // We need a city list and property list for the filter selects.
-  //
-  // SCHEMA GAP NOTE: Property does not yet have a `city` or `comm` field.
-  // Until the migration in the note above is applied:
-  //   - cities will be an empty array (city filter shows "All Cities" only).
-  //   - properties will have name only.
-  //
-  // After the migration, replace this block with:
-  //
-  //   const rawProperties = await prisma.property.findMany({
-  //     select: { id: true, name: true, city: true, comm: true },
-  //     orderBy: { name: 'asc' },
-  //   });
-  //
-  //   const citySet = new Set(rawProperties.map((p) => p.city).filter(Boolean));
-  //   const cities: CityOption[] = [...citySet]
-  //     .sort()
-  //     .map((c) => ({ value: c, label: c }));
-  //
-  //   const properties: PropertyOption[] = rawProperties.map((p) => ({
-  //     value: p.id,
-  //     label: p.name,
-  //   }));
-
+  // Property.city and Property.comm are live in the schema (Phase 6 migration).
   const rawProperties = await prisma.property.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, city: true, comm: true },
     orderBy: { name: 'asc' },
   });
 
-  // TEMPORARY: empty city list until schema is updated
-  const cities: CityOption[] = [];
+  const citySet = new Set(rawProperties.map((p) => p.city).filter(Boolean));
+  const cities: CityOption[] = [...citySet]
+    .sort()
+    .map((c) => ({ value: c, label: c }));
 
   const properties: PropertyOption[] = rawProperties.map((p) => ({
     value: p.id,

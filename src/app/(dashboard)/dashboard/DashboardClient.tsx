@@ -153,11 +153,10 @@ export function DashboardClient({ reports, properties }: DashboardClientProps) {
   // ── Aggregate for current period ──────────────────────────────────────────
   const agg = useMemo(() => {
     const raw = aggReps(filteredReps, (pid) => {
-      // Capital base: property-level capital (schema gap: defaults to 0 until migrated)
-      return 0;
+      return propMap[pid]?.capital ?? 0;
     });
     return withD(raw);
-  }, [filteredReps]);
+  }, [filteredReps, propMap]);
 
   // ── Empty state ───────────────────────────────────────────────────────────
   const isEmpty = !agg || (agg.rev === 0 && agg.exp === 0);
@@ -171,7 +170,7 @@ export function DashboardClient({ reports, properties }: DashboardClientProps) {
   );
 
   const trend = useMemo(() => {
-    return trendPeriods.map(({ m, y, l }) => {
+    return trendPeriods.map(({ m, y, l }: { m: number; y: number; l: string }) => {
       const rs = getFilteredRepsForMonth(allReps, propById, m, y);
       const ta = withD(aggReps(rs));
       return {
@@ -192,9 +191,9 @@ export function DashboardClient({ reports, properties }: DashboardClientProps) {
   // ── Channel aggregation ───────────────────────────────────────────────────
   const chanAgg = useMemo(() => {
     const agg: Record<string, number> = {};
-    filteredReps.forEach((r) => {
+    filteredReps.forEach((r: RepRow) => {
       if (r.channels && typeof r.channels === 'object') {
-        Object.entries(r.channels).forEach(([k, v]) => {
+        Object.entries(r.channels).forEach(([k, v]: [string, number]) => {
           agg[k] = (agg[k] ?? 0) + v;
         });
       }
@@ -205,7 +204,7 @@ export function DashboardClient({ reports, properties }: DashboardClientProps) {
   // ── Property revenue ──────────────────────────────────────────────────────
   const propRevs = useMemo(() => {
     const map: Record<string, number> = {};
-    filteredReps.forEach((r) => { map[r.pid] = (map[r.pid] ?? 0) + r.rev; });
+    filteredReps.forEach((r: RepRow) => { map[r.pid] = (map[r.pid] ?? 0) + r.rev; });
     return Object.entries(map)
       .map(([pid, rev]) => ({ name: propMap[pid]?.name ?? 'Unknown', rev }))
       .sort((a, b) => b.rev - a.rev)
@@ -213,8 +212,8 @@ export function DashboardClient({ reports, properties }: DashboardClientProps) {
   }, [filteredReps, propMap]);
 
   // ── Derived display values ────────────────────────────────────────────────
-  const totalNights = filteredReps.reduce((s, r) => s + (r.nights ?? 0), 0);
-  const activeProps = new Set(filteredReps.map((r) => r.pid)).size;
+  const totalNights = filteredReps.reduce((s: number, r: RepRow) => s + (r.nights ?? 0), 0);
+  const activeProps = new Set(filteredReps.map((r: RepRow) => r.pid)).size;
 
   // Expense ratio for info card
   const expRatio = agg && agg.rev > 0

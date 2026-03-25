@@ -15,6 +15,7 @@ import {
   RoleRequiredError,
 } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
+import { regenReports } from "@/lib/regenReports";
 
 interface BookingRow {
   id: string;
@@ -166,6 +167,7 @@ export async function PATCH(
       where: { id },
       data: updateData,
     });
+    await regenReports();
     return NextResponse.json({ data: serializeBooking(booking) });
   } catch (err) {
     return handleError(err);
@@ -192,6 +194,7 @@ export async function DELETE(
 
   try {
     await prisma.booking.delete({ where: { id } });
+    await regenReports();
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleError(err);

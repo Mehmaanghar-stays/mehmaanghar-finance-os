@@ -24,6 +24,7 @@ import {
   RoleRequiredError,
 } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
+import { regenReports } from "@/lib/regenReports";
 
 // ---------------------------------------------------------------------------
 // Request body types
@@ -213,6 +214,8 @@ export async function POST(
 
       return { bookingsCreated, expensesCreated };
     });
+
+    await regenReports();
 
     return NextResponse.json(
       {

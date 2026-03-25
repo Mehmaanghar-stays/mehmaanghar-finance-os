@@ -29,6 +29,7 @@ import {
 } from "@/lib/permissions";
 import { deleteFile } from "@/lib/storage";
 import { Prisma } from "@/generated/prisma/client/client";
+import { regenReports } from "@/lib/regenReports";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -207,6 +208,12 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // Normalise camelCase keys sent by DailyExpModal → snake_case used below
+  if (body.propertyId !== undefined && body.property_id === undefined)
+    body.property_id = body.propertyId;
+  if (body.expenseDate !== undefined && body.expense_date === undefined)
+    body.expense_date = body.expenseDate;
+
   // Required fields
   if (typeof body.property_id !== "string" || body.property_id.trim() === "") {
     return NextResponse.json(
@@ -253,6 +260,8 @@ export async function POST(
       },
     });
 
+    await regenReports();
+
     return NextResponse.json(
       { data: serializeDailyExpense(expense) },
       { status: 201 }
@@ -283,6 +292,10 @@ export async function PUT(
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
+
+  // Normalise camelCase key from DailyExpModal
+  if (body.expenseDate !== undefined && body.expense_date === undefined)
+    body.expense_date = body.expenseDate;
 
   const id = body.id;
   if (typeof id !== "string" || id.trim() === "") {
@@ -315,6 +328,8 @@ export async function PUT(
       where: { id: id.trim() },
       data: updateData,
     });
+
+    await regenReports();
 
     return NextResponse.json({ data: serializeDailyExpense(expense) });
   } catch (err) {
@@ -387,6 +402,8 @@ export async function DELETE(
     }
 
     await prisma.dailyExpense.delete({ where: { id: expenseId } });
+
+    await regenReports();
 
     return NextResponse.json({ success: true });
   } catch (err) {

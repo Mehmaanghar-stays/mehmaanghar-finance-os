@@ -39,10 +39,9 @@ export interface SerializableReport {
 export interface SerializableProperty {
   id: string;
   name: string;
-  // city and comm added in the schema migration (see layout.tsx flag).
-  // Until then these default to "" and 25.
   city: string;
   comm: number;
+  capital: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,19 +89,18 @@ export default async function DashboardPage() {
     }];
   });
 
-  // Fetch properties for lookup (name, city, comm).
-  // SCHEMA GAP: city/comm not yet in schema. Defaults applied here.
+  // Fetch properties for lookup (name, city, comm, capital).
   const rawProperties = await prisma.property.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, city: true, comm: true, capital: true },
     orderBy: { name: 'asc' },
   });
 
   const properties: SerializableProperty[] = rawProperties.map((p) => ({
     id: p.id,
     name: p.name,
-    // Replace with real p.city / Number(p.comm) after schema migration.
-    city: '',
-    comm: 25,
+    city: p.city,
+    comm: Number(p.comm),
+    capital: Number(p.capital),
   }));
 
   return (

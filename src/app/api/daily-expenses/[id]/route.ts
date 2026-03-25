@@ -16,6 +16,7 @@ import {
 } from "@/lib/permissions";
 import { deleteFile } from "@/lib/storage";
 import { Prisma } from "@/generated/prisma/client/client";
+import { regenReports } from "@/lib/regenReports";
 
 const STORAGE_BUCKET = "mg-finance-os";
 
@@ -124,6 +125,7 @@ export async function PATCH(
       where: { id },
       data: updateData,
     });
+    await regenReports();
     return NextResponse.json({ data: serializeDailyExpense(expense) });
   } catch (err) {
     return handleError(err);
@@ -175,6 +177,7 @@ export async function DELETE(
     }
 
     await prisma.dailyExpense.delete({ where: { id } });
+    await regenReports();
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleError(err);

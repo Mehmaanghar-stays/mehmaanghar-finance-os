@@ -22,9 +22,10 @@ import bcrypt from "bcryptjs";
 config({ path: ".env.local" });
 
 const pool = new Pool({ connectionString: process.env.DIRECT_URL });
-const adapter = new PrismaPg(pool);
-// Pool type from @types/pg conflicts with @prisma/adapter-pg's bundled version.
-// The adapter is compatible at runtime — this cast bridges the structural mismatch.
+// @types/pg conflicts with @prisma/adapter-pg's bundled pg types.
+// The Pool is structurally compatible at runtime — cast bridges the mismatch.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const adapter = new PrismaPg(pool as any);
 const prisma = new PrismaClient({
   adapter,
 } as unknown as ConstructorParameters<typeof PrismaClient>[0]);

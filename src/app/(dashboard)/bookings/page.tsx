@@ -93,21 +93,21 @@ export default async function BookingsPage() {
 
   // ── Fetch properties ──────────────────────────────────────────────────────
   const rawProps = await prisma.property.findMany({
-    select: { id: true, name: true, address: true },
+    select: { id: true, name: true, address: true, city: true, state: true, comm: true, capital: true, type: true, rooms: true, assets: true },
     orderBy: { name: 'asc' },
   });
 
   const properties: SerializableProperty[] = rawProps.map((p) => ({
     id:      p.id,
     name:    p.name,
-    city:    (p as Record<string, unknown>).city  as string ?? '',
-    state:   (p as Record<string, unknown>).state as string ?? '',
-    comm:    Number((p as Record<string, unknown>).comm)    || 25,
-    capital: Number((p as Record<string, unknown>).capital) || 0,
+    city:    p.city ?? '',
+    state:   p.state ?? '',
+    comm:    Number(p.comm) || 25,
+    capital: Number(p.capital) || 0,
     address: p.address,
-    type:    (p as Record<string, unknown>).type  as string ?? '',
-    rooms:   Number((p as Record<string, unknown>).rooms)   || 0,
-    assets:  ((p as Record<string, unknown>).assets as SerializableProperty['assets']) ?? [],
+    type:    p.type ?? '',
+    rooms:   Number(p.rooms) || 0,
+    assets:  (p.assets as SerializableProperty['assets']) ?? [],
   }));
 
   // ── Fetch guest names for autocomplete datalist ───────────────────────────

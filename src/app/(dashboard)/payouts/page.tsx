@@ -104,7 +104,7 @@ export default async function PayoutsPage() {
       notes:       true,
       property:    { select: {
         name: true,
-        // city available post-migration; safe cast for now
+        city: true,
       }},
       investor:    { select: { name: true } },
     },
@@ -115,7 +115,7 @@ export default async function PayoutsPage() {
     id:           p.id,
     propertyId:   p.property_id,
     propertyName: p.property.name,
-    propertyCity: (p.property as Record<string, unknown>).city as string ?? '',
+    propertyCity: p.property.city ?? '',
     investorId:   p.investor_id,
     investorName: p.investor.name,
     year:         p.year,
