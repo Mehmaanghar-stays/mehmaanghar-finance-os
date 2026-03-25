@@ -215,7 +215,7 @@ export function ReportsClient({
       {/* ══ Section 2: Generate Reports ═══════════════════════════════════ */}
       <div className="stl"><div className="d" />Generate Reports</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '11px' }}>
+      <div className="rg3" style={{ marginBottom: '16px' }}>
         {EXPORT_CARDS.map((card) => (
           <div key={card.title} className="cc" style={{ textAlign: 'center', padding: '22px 16px' }}>
             <div style={{ fontSize: '28px', marginBottom: '8px' }}>{card.icon}</div>

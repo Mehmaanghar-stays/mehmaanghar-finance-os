@@ -252,60 +252,71 @@ export function TopbarActions() {
     return [styles.btn, ...variants.map((v) => styles[v])].join(' ');
   }
 
+  // ── Mobile overflow menu ──────────────────────────────────────────────────
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* + Property */}
-      <button
-        type="button"
-        className={btnClass('btn-g', 'btn-sm')}
-        onClick={handleOpenPropModal}
-      >
-        + Property
-      </button>
+      {/* ── Desktop: full buttons (hidden on mobile via CSS) ──────────── */}
+      <div className={styles['tb-actions-desktop']}>
+        <button type="button" className={btnClass('btn-g', 'btn-sm')} onClick={handleOpenPropModal}>
+          + Property
+        </button>
+        <button type="button" className={btnClass('btn-g', 'btn-sm')} onClick={handleOpenInvModal}>
+          + Investor
+        </button>
+        <button type="button" className={btnClass('btn-g', 'btn-sm')} title="Download full backup as JSON" onClick={handleBackup}>
+          💾 Backup
+        </button>
+        <label className={btnClass('btn-g', 'btn-sm')} style={{ cursor: 'pointer' }} title="Restore from JSON backup">
+          📂 Restore
+          <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+        </label>
+        <button type="button" className={btnClass('btn-or', 'btn-sm')} onClick={handleExportCsv}>
+          ↓ Export CSV
+        </button>
+      </div>
 
-      {/* + Investor */}
-      <button
-        type="button"
-        className={btnClass('btn-g', 'btn-sm')}
-        onClick={handleOpenInvModal}
-      >
-        + Investor
-      </button>
-
-      {/* 💾 Backup */}
-      <button
-        type="button"
-        className={btnClass('btn-g', 'btn-sm')}
-        title="Download full backup as JSON"
-        onClick={handleBackup}
-      >
-        💾 Backup
-      </button>
-
-      {/* 📂 Restore */}
-      <label
-        className={btnClass('btn-g', 'btn-sm')}
-        style={{ cursor: 'pointer' }}
-        title="Restore from JSON backup"
-      >
-        📂 Restore
-        <input
-          type="file"
-          accept=".json"
-          style={{ display: 'none' }}
-          onChange={handleRestore}
-        />
-      </label>
-
-      {/* ↓ Export CSV */}
-      <button
-        type="button"
-        className={btnClass('btn-or', 'btn-sm')}
-        onClick={handleExportCsv}
-      >
-        ↓ Export CSV
-      </button>
+      {/* ── Mobile: overflow dropdown (hidden on desktop via CSS) ──────── */}
+      <div className={styles['tb-actions-mobile']}>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            className={btnClass('btn-g', 'btn-sm')}
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="More actions"
+          >
+            ⋮
+          </button>
+          {menuOpen && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 59 }}
+                onClick={() => setMenuOpen(false)}
+              />
+              <div className={styles['tb-dropdown']}>
+                <button type="button" onClick={() => { handleOpenPropModal(); setMenuOpen(false); }}>
+                  🏠 Property
+                </button>
+                <button type="button" onClick={() => { handleOpenInvModal(); setMenuOpen(false); }}>
+                  👤 Investor
+                </button>
+                <button type="button" onClick={() => { handleExportCsv(); setMenuOpen(false); }}>
+                  ↓ Export CSV
+                </button>
+                <button type="button" onClick={() => { handleBackup(); setMenuOpen(false); }}>
+                  💾 Backup
+                </button>
+                <label style={{ cursor: 'pointer' }}>
+                  📂 Restore
+                  <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => { handleRestore(e); setMenuOpen(false); }} />
+                </label>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* PropModal — add mode only from Topbar */}
       <PropModal

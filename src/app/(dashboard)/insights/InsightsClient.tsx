@@ -367,7 +367,7 @@ export function InsightsClient({
             Save Targets
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginTop: '8px' }}>
+        <div className="rg4" style={{ marginTop: '8px' }}>
           <div className={styles.fl}>
             <label>Revenue Target (₹)</label>
             <input

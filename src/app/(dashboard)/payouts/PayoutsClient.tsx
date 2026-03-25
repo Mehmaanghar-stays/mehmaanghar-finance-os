@@ -227,11 +227,11 @@ export function PayoutsClient({
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div className="page-hdr">
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Investor Payout Ledger
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="page-hdr-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Pending summary strip — verbatim colour logic */}
           <span
             id="pendingSummary"

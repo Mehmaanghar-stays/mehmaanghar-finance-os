@@ -7,6 +7,7 @@ import { prisma } from '@/lib/db';
 import type { TabKey } from '@/lib/permissions';
 import { NavItem } from './NavItem';
 import { LogoutButton } from './LogoutButton';
+import { SidebarShell } from './SidebarShell';
 import styles from './Sidebar.module.css';
 
 interface NavItemDef {
@@ -226,7 +227,7 @@ export async function Sidebar() {
   }
 
   return (
-    <aside className={styles.sb}>
+    <SidebarShell>
       <div className={styles['sb-logo']}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -281,6 +282,6 @@ export async function Sidebar() {
         Andheri West, Mumbai 400061<br />
         <a href="tel:+919839143040">+91 98391 43040</a>
       </div>
-    </aside>
+    </SidebarShell>
   );
 }

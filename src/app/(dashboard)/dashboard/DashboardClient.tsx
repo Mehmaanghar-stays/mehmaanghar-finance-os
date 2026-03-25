@@ -260,7 +260,7 @@ export function DashboardClient({ reports, properties }: DashboardClientProps) {
       </MetricCardGrid>
 
       {/* ── Info cards row ─────────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '11px', marginBottom: '16px' }}>
+      <div className="rg3" style={{ marginBottom: '16px' }}>
         {/* Total Nights */}
         <div className="cc" style={{ padding: '16px', textAlign: 'center' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--bl)', marginBottom: '4px' }}>TOTAL NIGHTS</div>

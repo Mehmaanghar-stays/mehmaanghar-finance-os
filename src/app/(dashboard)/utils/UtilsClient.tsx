@@ -244,7 +244,7 @@ export function UtilsClient({
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+      <div className="page-hdr" style={{ marginBottom: '14px' }}>
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Rent &amp; Utilities Tracker
         </div>
@@ -254,21 +254,21 @@ export function UtilsClient({
       </div>
 
       {/* ── 3 KPI cards — verbatim from utilKpis innerHTML ───────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '11px', marginBottom: '14px' }}>
+      <div className="rg3" style={{ marginBottom: '14px' }}>
         {/* Rent Pending */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--rd)', marginBottom: '4px' }}>Rent Pending</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>{fIN(rentPending)}</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(rentPending)}</div>
         </div>
         {/* Electricity Pending */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--go)', marginBottom: '4px' }}>Electricity Pending</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>{fIN(elecPending)}</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(elecPending)}</div>
         </div>
         {/* Paid % with progress bar */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gr)', marginBottom: '4px' }}>Paid {paidPct}%</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>{fIN(paidAll)} of {fIN(totalAll)}</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(paidAll)} of {fIN(totalAll)}</div>
           <div style={{ background: 'var(--s2)', borderRadius: '6px', height: '6px', marginTop: '6px', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${paidPct}%`, background: 'var(--gr)', borderRadius: '6px' }} />
           </div>
@@ -276,7 +276,7 @@ export function UtilsClient({
       </div>
 
       {/* ── Local filter row — isolated from global PeriodBar ────────────── */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', color: 'var(--t2)', fontWeight: 600 }}>Filter:</span>
         <select className="fsel" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
           {MS_OPTS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}

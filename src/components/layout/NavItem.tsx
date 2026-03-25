@@ -13,6 +13,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useCallback } from 'react';
+import { useSidebarStore } from '@/store/sidebar';
 import styles from './Sidebar.module.css';
 
 // ---------------------------------------------------------------------------
@@ -31,6 +33,7 @@ interface NavItemProps {
 
 export function NavItem({ href, children }: NavItemProps) {
   const pathname = usePathname();
+  const closeSidebar = useSidebarStore((s) => s.close);
 
   // A link item is active when the current pathname starts with its href.
   // Exact match first to handle root-level pages correctly.
@@ -40,8 +43,14 @@ export function NavItem({ href, children }: NavItemProps) {
     .filter(Boolean)
     .join(' ');
 
+  // Close sidebar on nav click (mobile only — desktop sidebar is always
+  // visible via CSS so the close is harmless there).
+  const handleClick = useCallback(() => {
+    closeSidebar();
+  }, [closeSidebar]);
+
   return (
-    <Link href={href} className={className}>
+    <Link href={href} className={className} onClick={handleClick}>
       {children}
     </Link>
   );

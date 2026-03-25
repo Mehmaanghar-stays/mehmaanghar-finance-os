@@ -216,7 +216,7 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div className="page-hdr">
         <div className="stl" style={{ marginBottom: 0 }}><div className="d" />Guest Intelligence</div>
       </div>
 

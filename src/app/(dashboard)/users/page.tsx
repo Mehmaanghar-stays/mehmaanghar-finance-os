@@ -165,11 +165,12 @@ export default function UsersPage() {
       <div className="stl"><div className="d" />Create New User</div>
 
       <div className="cc" style={{ marginBottom: '20px', padding: '16px' }}>
-        {/* 3-col grid matching existing form but using platform classes */}
+        {/* Responsive form grid: 3 fields + button */}
         <form
           onSubmit={handleCreateUser}
           noValidate
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '12px', alignItems: 'flex-end' }}
+          className="rg4"
+          style={{ alignItems: 'flex-end' }}
         >
           <div className={styles.fl}>
             <label>Username</label>
@@ -210,14 +211,17 @@ export default function UsersPage() {
                 ))}
             </select>
           </div>
-          <button
-            type="submit"
-            className="btn btn-or"
-            disabled={formLoading || !formUsername.trim() || !formPassword}
-            style={{ height: '38px' }}
-          >
-            {formLoading ? 'Creating…' : 'Create User'}
-          </button>
+          <div className={styles.fl}>
+            <label>&nbsp;</label>
+            <button
+              type="submit"
+              className="btn btn-or"
+              disabled={formLoading || !formUsername.trim() || !formPassword}
+              style={{ width: '100%', whiteSpace: 'nowrap' }}
+            >
+              {formLoading ? 'Creating…' : 'Create User'}
+            </button>
+          </div>
         </form>
 
         {/* Form feedback */}
@@ -253,7 +257,7 @@ export default function UsersPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table>
+            <table style={{ minWidth: '400px' }}>
               <thead>
                 <tr>
                   <th>Username</th>

@@ -120,6 +120,18 @@ body {
   background: var(--or);
 }
 
+/* responsive — Page header bar base class.
+   Desktop: flex row with space-between (title left, actions right).
+   Mobile: keeps space-between for single buttons; multi-button groups
+   (.page-hdr-actions) go full-width below via flex-wrap. */
+.page-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 4px;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 /* 4. LAYOUT PRIMITIVES                                                        */
 /* Verbatim from the HTML. Applied by the (dashboard) layout.                 */
@@ -407,14 +419,122 @@ tbody td {
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 /* 6. RESPONSIVE                                                               */
-/* Verbatim from the HTML @media block.                                       */
+/* Verbatim from the HTML @media block, updated with consistent breakpoints.  */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
-@media (max-width: 900px) {
+/* responsive — Tablet and below: sidebar hidden, content full width */
+@media (max-width: 1023px) {
   .main { margin-left: 0; }
   .pbar { flex-wrap: wrap; gap: 6px; }
   .crow.r2,
   .crow.r3,
   .crow.re { grid-template-columns: 1fr; }
-  .mcg { grid-template-columns: repeat(2, 1fr); }
+  /* responsive — Cash flow cards: 3-col → 1-col */
+  .cfrow { grid-template-columns: 1fr; }
+  /* responsive — Insight grid: 3-col → 2-col */
+  .isg { grid-template-columns: repeat(2, 1fr); }
+  /* responsive — Reduce content padding */
+  .cnt { padding: 12px 10px; }
+
+  /* responsive — Table header bar: wrap on tablet when filters overflow */
+  .th {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+
+  /* responsive — Page header bars (flex space-between): wrap on tablet */
+  .page-hdr {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* responsive — Pending summary strip: smaller on tablet */
+  #pendingSummary {
+    font-size: 10.5px;
+    padding: 4px 8px;
+  }
+}
+
+/* responsive — Mobile-specific overrides */
+@media (max-width: 639px) {
+  /* responsive — Insight grid: single column */
+  .isg { grid-template-columns: 1fr; }
+  /* responsive — Content padding tighter */
+  .cnt { padding: 10px 8px; }
+  /* responsive — Chart containers full width */
+  .cc { padding: 12px; }
+
+  /* responsive — Table header bar: stack title/filters vertically */
+  .th {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* responsive — Table header filter row: full width */
+  .th > div:last-child {
+    width: 100%;
+  }
+
+  /* responsive — Table cells: tighter on mobile */
+  thead th { padding: 6px 8px; font-size: 9px; }
+  tbody td { padding: 8px 8px; font-size: 11.5px; }
+
+  /* responsive — Page header bars: wrap with spacing, keep space-between */
+  .page-hdr {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    margin-bottom: 18px;
+  }
+
+  /* responsive — Multi-button action groups: stack full width below title */
+  .page-hdr-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+  }
+
+  /* responsive — Buttons inside page-hdr-actions stretch equally */
+  .page-hdr-actions > button,
+  .page-hdr-actions > span {
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+  }
+
+  /* responsive — Pending summary: full width on mobile */
+  #pendingSummary {
+    width: 100%;
+    justify-content: center;
+    font-size: 11px;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* 7. RESPONSIVE GRID UTILITIES                                                */
+/* Used by client components that have inline-style grids which need to       */
+/* stack on mobile. CSS media queries cannot override inline styles, so       */
+/* these classes replace the inline gridTemplateColumns.                       */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* responsive — 3-column grid that stacks on mobile */
+.rg3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+/* responsive — 4-column grid that stacks on mobile */
+.rg4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+/* responsive — 2-column grid that stacks on mobile */
+.rg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* responsive */
+@media (max-width: 1023px) {
+  .rg3 { grid-template-columns: repeat(2, 1fr); }
+  .rg4 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* responsive */
+@media (max-width: 639px) {
+  .rg3 { grid-template-columns: 1fr; }
+  .rg4 { grid-template-columns: 1fr; }
+  .rg2 { grid-template-columns: 1fr; }
 }

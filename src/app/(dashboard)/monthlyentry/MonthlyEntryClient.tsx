@@ -247,7 +247,7 @@ export function MonthlyEntryClient({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <>
+    <div style={{ maxWidth: '680px' }}>
       {/* ── Page header — same pattern as DailyExpClient, BookingsClient ── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div className="stl" style={{ marginBottom: 0 }}>
@@ -262,7 +262,7 @@ export function MonthlyEntryClient({
 
       {/* ── Property + Month selectors ────────────────────────────────────── */}
       <div className="cc" style={{ marginBottom: '14px', padding: '16px' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+        <div className="rg2" style={{ marginBottom: '10px' }}>
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
               Property *
@@ -295,7 +295,7 @@ export function MonthlyEntryClient({
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        <div className="rg2">
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
               Year *
@@ -475,6 +475,6 @@ export function MonthlyEntryClient({
           Your role does not have permission to create monthly entries.
         </div>
       )}
-    </>
+    </div>
   );
 }
