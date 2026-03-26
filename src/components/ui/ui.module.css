@@ -83,7 +83,14 @@
 
 /* ── Modal form helpers ──────────────────────────────────────────────────── */
 
-.fl { margin-bottom: 12px; }
+/* .fl — form field wrapper. display:flex+column so children (input, select,
+   button) fill the available height when .fl itself is stretched by a flex
+   row parent (e.g. rg4 with align-items:stretch). */
+.fl {
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+}
 .fl label {
   display: block;
   font-size: 11.5px;
@@ -104,6 +111,43 @@
   outline: none;
   background: #fff;
   transition: border-color .14s;
+}
+
+/* Select-specific overrides: strip the native arrow so .sw can provide one */
+.fs {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;   /* room for the .sw chevron */
+  cursor: pointer;
+}
+
+/* ── Select wrapper — use this around every <select className={styles.fs}> ── */
+/* Drop a chevron via CSS background-image. No extra DOM elements needed.      */
+/* Usage: <div className={styles.sw}><select className={styles.fs}>…</div>     */
+.sw {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+/* Rotate chevron when the select is open (:focus-within catches it) */
+.sw:focus-within::after {
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.sw::after {
+  content: '';
+  pointer-events: none;
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: transform 0.15s ease;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--t2);
 }
 
 .fi:focus,

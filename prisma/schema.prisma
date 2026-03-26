@@ -7,16 +7,17 @@
 //   - datasource block has `provider` only — url lives in prisma.config.ts.
 //   - generator uses `prisma-client` provider + `engineType = "client"`.
 //
-// 11 tables:
+// 10 tables:
 //   Auth / RBAC  : roles, users
 //   Core data    : properties, investors, guests, bookings
-//   Finance      : daily_expenses, expenses, payouts
+//   Finance      : daily_expenses, payouts
 //   Reporting    : reports
 //   Config       : utils_settings
 //
 // Migration history:
 //   20260322155931_init_schema  — initial schema (Phase 2)
 //   add_phase5_fields           — gap fields for Phase 6 API routes (Phase 5)
+//   remove_expense_model        — removed unused Expense model (expenses table)
 // =============================================================================
 
 generator client {
@@ -108,7 +109,6 @@ model Property {
   investors      Investor[]
   bookings       Booking[]
   daily_expenses DailyExpense[]
-  expenses       Expense[]
   payouts        Payout[]
 
   @@map("properties")
@@ -238,24 +238,6 @@ model DailyExpense {
   updated_at DateTime @updatedAt
 
   @@map("daily_expenses")
-}
-
-/// Period-level operating expense (Expenses tab) — e.g. rent, salaries.
-model Expense {
-  id          String   @id @default(cuid())
-  property_id String
-  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
-
-  year     Int
-  month    Int
-  category String
-  amount   Decimal @db.Decimal(14, 2)
-  notes    String?
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@map("expenses")
 }
 
 /// Investor payout record.

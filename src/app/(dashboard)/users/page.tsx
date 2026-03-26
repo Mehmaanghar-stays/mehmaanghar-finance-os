@@ -2,23 +2,10 @@
 // src/app/(dashboard)/users/page.tsx
 //
 // User Management + Role Permissions panel — SuperAdmin only.
-// Rendered inside the standard (dashboard) layout (Sidebar + Topbar + PeriodBar).
-// Access enforced by proxy.ts + getRolePermissions() — non-SuperAdmin roles
-// receive tabPerms['users'] !== true and are redirected by the Server Component
-// wrapper. This Client Component never renders for non-SuperAdmin users.
 //
-// Two sections:
-//   1. User Management — create users + list all users (unchanged from Phase 7)
-//   2. Role Permissions — visual matrix for SuperAdmin to view/edit per-tab
-//      and per-CRUD permissions for each role, without code changes
-//
-// ─── API ROUTE OBSERVATION ──────────────────────────────────────────────────
-// GET  /api/roles  → { roles: [{ id, name, tab_permissions, crud_permissions, … }] }
-// PATCH /api/roles → body: { id, tab_permissions?, crud_permissions? }
-//   Field names are snake_case — matching the Prisma column names.
-//   The prompt referenced "PUT /api/roles" but the actual route is PATCH.
-//   Using PATCH as implemented — the route is not changed.
-// ─────────────────────────────────────────────────────────────────────────────
+// Modals use platform classes: .ov.open / .modal / .mt / .ms / .mc-x / .mf / .mb
+// Select uses .sw wrapper + .fs — consistent with every other page.
+// Period bar hidden via PeriodBar HIDE_ON array (no work needed here).
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/Toast';
@@ -36,7 +23,6 @@ interface UserRow {
   created_at: string;
 }
 
-/** Full role row including permission JSON columns from GET /api/roles. */
 interface RoleRow {
   id: string;
   name: string;
@@ -45,51 +31,36 @@ interface RoleRow {
 }
 
 // ---------------------------------------------------------------------------
-// Constants — sourced from permissions.ts TabKey type
+// Constants
 // ---------------------------------------------------------------------------
 
 const ALL_TAB_KEYS: TabKey[] = [
-  'dashboard',
-  'cashflow',
-  'properties',
-  'investors',
-  'reports',
-  'insights',
-  'expenses',
-  'payouts',
-  'bookings',
-  'crm',
-  'dailyexp',
-  'monthlyentry',
-  'utils',
-  'users',
+  'dashboard', 'cashflow', 'properties', 'investors', 'reports',
+  'insights', 'expenses', 'payouts', 'bookings', 'crm',
+  'dailyexp', 'monthlyentry', 'utils', 'users',
 ];
 
-/** Human-readable labels — matches Sidebar nav labels. */
 const TAB_LABELS: Record<TabKey, string> = {
-  dashboard:     'Dashboard',
-  cashflow:      'Cash Flow',
-  properties:    'Properties',
-  investors:     'Investors',
-  reports:       'Reports',
-  insights:      'Smart Insights',
-  expenses:      'Expense Intel',
-  payouts:       'Payout Ledger',
-  bookings:      'Bookings',
-  crm:           'Guest CRM',
-  dailyexp:      'Daily Expenses',
-  monthlyentry:  'Monthly Entry',
-  utils:         'Rent & Utilities',
-  users:         'User Management',
+  dashboard:    'Dashboard',
+  cashflow:     'Cash Flow',
+  properties:   'Properties',
+  investors:    'Investors',
+  reports:      'Reports',
+  insights:     'Smart Insights',
+  expenses:     'Expense Intel',
+  payouts:      'Payout Ledger',
+  bookings:     'Bookings',
+  crm:          'Guest CRM',
+  dailyexp:     'Daily Expenses',
+  monthlyentry: 'Monthly Entry',
+  utils:        'Rent & Utilities',
+  users:        'User Management',
 };
 
 const CRUD_ACTIONS: CrudAction[] = ['read', 'create', 'update', 'delete'];
 
 const CRUD_LABELS: Record<CrudAction, string> = {
-  read:   'Read',
-  create: 'Create',
-  update: 'Update',
-  delete: 'Delete',
+  read: 'Read', create: 'Create', update: 'Update', delete: 'Delete',
 };
 
 // ---------------------------------------------------------------------------
@@ -105,7 +76,7 @@ export default function UsersPage() {
   const [loadingRoles, setLoadingRoles] = useState(true);
   const [fetchError,   setFetchError]   = useState<string | null>(null);
 
-  // Create form state
+  // Create form
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [formRoleId,   setFormRoleId]   = useState('');
@@ -113,51 +84,56 @@ export default function UsersPage() {
   const [formSuccess,  setFormSuccess]  = useState<string | null>(null);
   const [formLoading,  setFormLoading]  = useState(false);
 
-  // Permissions editor state
-  const [selectedRoleId, setSelectedRoleId] = useState<string>('');
-  const [editedTabPerms, setEditedTabPerms] = useState<
-    Record<string, Record<TabKey, boolean>>
-  >({});
-  const [editedCrudPerms, setEditedCrudPerms] = useState<
-    Record<string, Record<TabKey, Record<CrudAction, boolean>>>
-  >({});
-  const [dirtyRoles, setDirtyRoles] = useState<Set<string>>(new Set());
-  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
+  // Change password modal
+  const [pwdUserId,   setPwdUserId]   = useState<string | null>(null);
+  const [pwdUsername, setPwdUsername] = useState('');
+  const [pwdValue,    setPwdValue]    = useState('');
+  const [pwdLoading,  setPwdLoading]  = useState(false);
+  const [pwdError,    setPwdError]    = useState<string | null>(null);
 
-  // ── Fetch users ───────────────────────────────────────────────────────────
+  // Delete confirm modal
+  const [deleteUserId,   setDeleteUserId]   = useState<string | null>(null);
+  const [deleteUsername, setDeleteUsername] = useState('');
+  const [deleteLoading,  setDeleteLoading]  = useState(false);
+
+  // Permissions editor
+  const [selectedRoleId,  setSelectedRoleId]  = useState('');
+  const [editedTabPerms,  setEditedTabPerms]  = useState<Record<string, Record<TabKey, boolean>>>({});
+  const [editedCrudPerms, setEditedCrudPerms] = useState<Record<string, Record<TabKey, Record<CrudAction, boolean>>>>({});
+  const [dirtyRoles,      setDirtyRoles]      = useState<Set<string>>(new Set());
+  const [savingRoleId,    setSavingRoleId]    = useState<string | null>(null);
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
     setLoadingUsers(true);
     try {
       const res = await fetch('/api/auth/users');
-      if (!res.ok) throw new Error('Failed to load users.');
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setUsers(data.users ?? []);
     } catch {
-      setFetchError('Failed to load user list. Check your connection.');
+      setFetchError('Failed to load user list.');
     } finally {
       setLoadingUsers(false);
     }
   }, []);
 
-  // ── Fetch roles (full permissions) ────────────────────────────────────────
   const fetchRoles = useCallback(async () => {
     setLoadingRoles(true);
     try {
       const res = await fetch('/api/roles');
-      if (!res.ok) throw new Error('Failed to load roles.');
+      if (!res.ok) throw new Error();
       const data = await res.json();
       const fetched: RoleRow[] = data.roles ?? [];
       setRoles(fetched);
 
-      // Pre-select first non-SuperAdmin role for create-user form
       const firstNonSuper = fetched.find((r) => r.name !== 'SuperAdmin');
-      if (firstNonSuper) setFormRoleId(firstNonSuper.id);
+      if (firstNonSuper) {
+        setFormRoleId(firstNonSuper.id);
+        setSelectedRoleId(firstNonSuper.id);
+      }
 
-      // Pre-select first non-SuperAdmin for permissions editor
-      if (firstNonSuper) setSelectedRoleId(firstNonSuper.id);
-
-      // Seed editable permission maps from fetched data
-      const tabMap: Record<string, Record<TabKey, boolean>> = {};
+      const tabMap:  Record<string, Record<TabKey, boolean>> = {};
       const crudMap: Record<string, Record<TabKey, Record<CrudAction, boolean>>> = {};
       for (const r of fetched) {
         tabMap[r.id] = { ...r.tab_permissions };
@@ -173,16 +149,13 @@ export default function UsersPage() {
       setEditedCrudPerms(crudMap);
       setDirtyRoles(new Set());
     } catch {
-      setFetchError('Failed to load roles. Check your connection.');
+      setFetchError('Failed to load roles.');
     } finally {
       setLoadingRoles(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchUsers();
-    fetchRoles();
-  }, [fetchUsers, fetchRoles]);
+  useEffect(() => { fetchUsers(); fetchRoles(); }, [fetchUsers, fetchRoles]);
 
   // ── Create user ───────────────────────────────────────────────────────────
   async function handleCreateUser(e: React.FormEvent) {
@@ -213,29 +186,70 @@ export default function UsersPage() {
     }
   }
 
-  // ── Permission toggle handlers ────────────────────────────────────────────
+  // ── Change password ───────────────────────────────────────────────────────
+  function openPwdModal(userId: string, username: string) {
+    setPwdUserId(userId); setPwdUsername(username); setPwdValue(''); setPwdError(null);
+  }
+  function closePwdModal() {
+    setPwdUserId(null); setPwdUsername(''); setPwdValue(''); setPwdError(null);
+  }
+  async function handleChangePassword() {
+    if (!pwdUserId) return;
+    if (pwdValue.length < 8) { setPwdError('Password must be at least 8 characters.'); return; }
+    setPwdLoading(true); setPwdError(null);
+    try {
+      const res = await fetch(`/api/auth/users/${pwdUserId}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pwdValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setPwdError(data.error ?? 'Failed to change password.'); return; }
+      toast(`✓ Password updated for "${pwdUsername}"`, 'ok');
+      closePwdModal();
+    } catch {
+      setPwdError('Network error. Please try again.');
+    } finally {
+      setPwdLoading(false);
+    }
+  }
+
+  // ── Delete user ───────────────────────────────────────────────────────────
+  function openDeleteConfirm(userId: string, username: string) {
+    setDeleteUserId(userId); setDeleteUsername(username);
+  }
+  function closeDeleteConfirm() {
+    setDeleteUserId(null); setDeleteUsername('');
+  }
+  async function handleDeleteUser() {
+    if (!deleteUserId) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/auth/users/${deleteUserId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) { toast(data.error ?? 'Failed to delete user.', 'er'); return; }
+      toast(`User "${deleteUsername}" deleted.`, 'ok');
+      closeDeleteConfirm();
+      await fetchUsers();
+    } catch {
+      toast('Network error. Please try again.', 'er');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
+  // ── Permission toggles ────────────────────────────────────────────────────
   function handleTabToggle(roleId: string, tab: TabKey, checked: boolean) {
-    setEditedTabPerms((prev) => ({
-      ...prev,
-      [roleId]: { ...prev[roleId], [tab]: checked },
-    }));
+    setEditedTabPerms((prev) => ({ ...prev, [roleId]: { ...prev[roleId], [tab]: checked } }));
     if (!checked) {
-      // Tab hidden → turn off all CRUD
       setEditedCrudPerms((prev) => ({
         ...prev,
-        [roleId]: {
-          ...prev[roleId],
-          [tab]: { create: false, read: false, update: false, delete: false },
-        },
+        [roleId]: { ...prev[roleId], [tab]: { create: false, read: false, update: false, delete: false } },
       }));
     } else {
-      // Tab visible → auto-enable read CRUD
       setEditedCrudPerms((prev) => ({
         ...prev,
-        [roleId]: {
-          ...prev[roleId],
-          [tab]: { ...prev[roleId][tab], read: true },
-        },
+        [roleId]: { ...prev[roleId], [tab]: { ...prev[roleId][tab], read: true } },
       }));
     }
     setDirtyRoles((prev) => new Set(prev).add(roleId));
@@ -244,64 +258,42 @@ export default function UsersPage() {
   function handleCrudToggle(roleId: string, tab: TabKey, action: CrudAction, checked: boolean) {
     setEditedCrudPerms((prev) => ({
       ...prev,
-      [roleId]: {
-        ...prev[roleId],
-        [tab]: { ...prev[roleId][tab], [action]: checked },
-      },
+      [roleId]: { ...prev[roleId], [tab]: { ...prev[roleId][tab], [action]: checked } },
     }));
-    // Enabling any CRUD action but tab visibility is off → auto-enable tab
     if (checked && !editedTabPerms[roleId]?.[tab]) {
-      setEditedTabPerms((prev) => ({
-        ...prev,
-        [roleId]: { ...prev[roleId], [tab]: true },
-      }));
+      setEditedTabPerms((prev) => ({ ...prev, [roleId]: { ...prev[roleId], [tab]: true } }));
     }
-    // Turning off read CRUD → also hide tab + turn off all CRUD
     if (action === 'read' && !checked) {
-      setEditedTabPerms((prev) => ({
-        ...prev,
-        [roleId]: { ...prev[roleId], [tab]: false },
-      }));
+      setEditedTabPerms((prev) => ({ ...prev, [roleId]: { ...prev[roleId], [tab]: false } }));
       setEditedCrudPerms((prev) => ({
         ...prev,
-        [roleId]: {
-          ...prev[roleId],
-          [tab]: { create: false, read: false, update: false, delete: false },
-        },
+        [roleId]: { ...prev[roleId], [tab]: { create: false, read: false, update: false, delete: false } },
       }));
     }
     setDirtyRoles((prev) => new Set(prev).add(roleId));
   }
 
-  // ── Save permissions ──────────────────────────────────────────────────────
   async function handleSavePermissions(roleId: string) {
     const role = roles.find((r) => r.id === roleId);
     if (!role || role.name === 'SuperAdmin') return;
-
     setSavingRoleId(roleId);
     try {
       const res = await fetch('/api/roles', {
-        method: 'PATCH',
+        method:  'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: roleId,
-          tab_permissions: editedTabPerms[roleId],
+          id:               roleId,
+          tab_permissions:  editedTabPerms[roleId],
           crud_permissions: editedCrudPerms[roleId],
         }),
       });
-
       if (!res.ok) {
-        const data = await res.json();
-        toast(data.error ?? 'Failed to save permissions', 'er');
+        const d = await res.json();
+        toast(d.error ?? 'Failed to save permissions', 'er');
         return;
       }
-
       toast(`✓ Permissions saved for "${role.name}"`, 'ok');
-      setDirtyRoles((prev) => {
-        const next = new Set(prev);
-        next.delete(roleId);
-        return next;
-      });
+      setDirtyRoles((prev) => { const n = new Set(prev); n.delete(roleId); return n; });
     } catch {
       toast('Network error — please try again', 'er');
     } finally {
@@ -309,25 +301,20 @@ export default function UsersPage() {
     }
   }
 
-  // ── Derived state for permissions section ─────────────────────────────────
-  const selectedRole = roles.find((r) => r.id === selectedRoleId);
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const selectedRole         = roles.find((r) => r.id === selectedRoleId);
   const isSuperAdminSelected = selectedRole?.name === 'SuperAdmin';
-  const nonSuperAdminRoles = roles.filter((r) => r.name !== 'SuperAdmin');
-  const superAdminRole = roles.find((r) => r.name === 'SuperAdmin');
+  const nonSuperAdminRoles   = roles.filter((r) => r.name !== 'SuperAdmin');
+  const superAdminRole       = roles.find((r) => r.name === 'SuperAdmin');
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
-      {/* ── Admin banner — visual cue that this is a system panel ────────── */}
+      {/* ── System Administration banner ─────────────────────────────────── */}
       <div style={{
-        background: 'var(--orp)',
-        border: '1.5px solid var(--or)',
-        borderRadius: 'var(--r)',
-        padding: '10px 16px',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
+        background: 'var(--orp)', border: '1.5px solid var(--or)',
+        borderRadius: 'var(--r)', padding: '10px 16px',
+        marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px',
       }}>
         <span style={{ fontSize: '16px' }}>⚙</span>
         <div>
@@ -340,7 +327,6 @@ export default function UsersPage() {
         </div>
       </div>
 
-      {/* ── Fetch error ────────────────────────────────────────────────────── */}
       {fetchError && (
         <div style={{
           background: 'var(--rdp)', border: '1px solid var(--rd)',
@@ -352,20 +338,13 @@ export default function UsersPage() {
       )}
 
       {/* ════════════════════════════════════════════════════════════════════ */}
-      {/* SECTION 1: User Management                                          */}
+      {/* SECTION 1 — Create New User                                         */}
       {/* ════════════════════════════════════════════════════════════════════ */}
-
-      {/* ── Create User form ─────────────────────────────────────────────── */}
       <div className="stl"><div className="d" />Create New User</div>
 
       <div className="cc" style={{ marginBottom: '20px', padding: '16px' }}>
-        {/* Responsive form grid: 3 fields + button */}
-        <form
-          onSubmit={handleCreateUser}
-          noValidate
-          className="rg4"
-          style={{ alignItems: 'flex-end' }}
-        >
+        <form onSubmit={handleCreateUser} noValidate className="rg4" style={{ alignItems: 'stretch' }}>
+
           <div className={styles.fl}>
             <label>Username</label>
             <input
@@ -378,6 +357,7 @@ export default function UsersPage() {
               required
             />
           </div>
+
           <div className={styles.fl}>
             <label>Password</label>
             <input
@@ -390,35 +370,37 @@ export default function UsersPage() {
               required
             />
           </div>
+
+          {/* Role — .sw wrapper provides chevron via CSS ::after, no JS needed */}
           <div className={styles.fl}>
             <label>Role</label>
-            <select
-              className={styles.fs}
-              value={formRoleId}
-              onChange={(e) => setFormRoleId(e.target.value)}
-              disabled={formLoading || loadingRoles}
-            >
-              {roles
-                .filter((r) => r.name !== 'SuperAdmin')
-                .map((r) => (
-                  <option key={r.id} value={r.id}>{r.name}</option>
-                ))}
-            </select>
+            <div className={styles.sw}>
+              <select
+                className={styles.fs}
+                value={formRoleId}
+                onChange={(e) => setFormRoleId(e.target.value)}
+                disabled={formLoading || loadingRoles}
+              >
+                {roles
+                  .filter((r) => r.name !== 'SuperAdmin')
+                  .map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </div>
           </div>
+
           <div className={styles.fl}>
             <label>&nbsp;</label>
             <button
               type="submit"
               className="btn btn-or"
               disabled={formLoading || !formUsername.trim() || !formPassword}
-              style={{ width: '100%', whiteSpace: 'nowrap' }}
+              style={{ width: '100%', whiteSpace: 'nowrap', flex: 1 }}
             >
               {formLoading ? 'Creating…' : 'Create User'}
             </button>
           </div>
         </form>
 
-        {/* Form feedback */}
         {formError && (
           <div style={{
             marginTop: '12px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
@@ -437,7 +419,9 @@ export default function UsersPage() {
         )}
       </div>
 
-      {/* ── All Users table ──────────────────────────────────────────────── */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 2 — All Users                                               */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
       <div className="stl"><div className="d" />All Users</div>
 
       <div className="tw">
@@ -451,12 +435,13 @@ export default function UsersPage() {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ minWidth: '400px' }}>
+            <table style={{ minWidth: '500px' }}>
               <thead>
                 <tr>
                   <th>Username</th>
                   <th>Role</th>
                   <th>Created</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -468,22 +453,11 @@ export default function UsersPage() {
                       <td style={{ fontWeight: 600 }}>{u.username}</td>
                       <td>
                         <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '3px 10px',
-                          borderRadius: '20px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          background: isSuperAdmin
-                            ? 'var(--orp)'
-                            : isAdmin
-                            ? 'rgba(99,102,241,.1)'
-                            : 'var(--s2)',
-                          color: isSuperAdmin
-                            ? 'var(--or)'
-                            : isAdmin
-                            ? '#6366F1'
-                            : 'var(--t2)',
+                          display: 'inline-flex', alignItems: 'center',
+                          padding: '3px 10px', borderRadius: '20px',
+                          fontSize: '11px', fontWeight: 600,
+                          background: isSuperAdmin ? 'var(--orp)' : isAdmin ? 'rgba(99,102,241,.1)' : 'var(--s2)',
+                          color:      isSuperAdmin ? 'var(--or)'  : isAdmin ? '#6366F1'             : 'var(--t2)',
                           border: `1px solid ${isSuperAdmin ? 'var(--or)' : isAdmin ? 'rgba(99,102,241,.25)' : 'var(--bdr)'}`,
                         }}>
                           {isSuperAdmin && '⚙ '}{u.role.name}
@@ -493,6 +467,29 @@ export default function UsersPage() {
                         {new Date(u.created_at).toLocaleDateString('en-IN', {
                           day: '2-digit', month: 'short', year: 'numeric',
                         })}
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {!isSuperAdmin && (
+                          <div style={{ display: 'inline-flex', gap: '6px' }}>
+                            <button
+                              className="btn btn-g btn-sm"
+                              onClick={() => openPwdModal(u.id, u.username)}
+                            >
+                              🔑 Password
+                            </button>
+                            <button
+                              className="btn btn-sm"
+                              style={{
+                                background: 'var(--rdp)',
+                                color: 'var(--rd)',
+                                border: '1px solid var(--rd)',
+                              }}
+                              onClick={() => openDeleteConfirm(u.id, u.username)}
+                            >
+                              🗑 Delete
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -504,9 +501,8 @@ export default function UsersPage() {
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════ */}
-      {/* SECTION 2: Role Permissions                                         */}
+      {/* SECTION 3 — Role Permissions                                        */}
       {/* ════════════════════════════════════════════════════════════════════ */}
-
       <div className="stl" style={{ marginTop: '8px' }}><div className="d" />Role Permissions</div>
 
       <div className="cc" style={{ padding: '16px', marginBottom: '16px' }}>
@@ -516,9 +512,6 @@ export default function UsersPage() {
           </div>
         ) : (
           <>
-            {/* ── Role selection tab strip ──────────────────────────────────── */}
-            {/* Uses .btn .btn-g (inactive) / .btn .btn-or (active) — same pill */}
-            {/* toggle pattern used throughout the app for inline selection.     */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
               {superAdminRole && (
                 <button
@@ -539,40 +532,28 @@ export default function UsersPage() {
               ))}
             </div>
 
-            {/* ── Locked notice for SuperAdmin ──────────────────────────────── */}
             {isSuperAdminSelected && (
               <div style={{
-                background: 'var(--orp)',
-                border: '1px solid var(--or)',
-                borderRadius: '8px',
-                padding: '8px 12px',
-                fontSize: '12px',
-                color: 'var(--or)',
-                marginBottom: '12px',
+                background: 'var(--orp)', border: '1px solid var(--or)',
+                borderRadius: '8px', padding: '8px 12px',
+                fontSize: '12px', color: 'var(--or)', marginBottom: '12px',
               }}>
                 SuperAdmin has full access to all tabs and actions. These permissions cannot be edited.
               </div>
             )}
 
-            {/* ── Permissions matrix table ─────────────────────────────────── */}
             {selectedRoleId && editedTabPerms[selectedRoleId] && (
               <div style={{ overflowX: 'auto' }}>
-                <table
-                  style={{
-                    minWidth: '520px',
-                    ...(isSuperAdminSelected
-                      ? { opacity: 0.5, pointerEvents: 'none' as const }
-                      : {}),
-                  }}
-                >
+                <table style={{
+                  minWidth: '520px',
+                  ...(isSuperAdminSelected ? { opacity: 0.5, pointerEvents: 'none' as const } : {}),
+                }}>
                   <thead>
                     <tr>
                       <th>Tab</th>
                       <th style={{ textAlign: 'center' }}>Visible</th>
-                      {CRUD_ACTIONS.map((action) => (
-                        <th key={action} style={{ textAlign: 'center' }}>
-                          {CRUD_LABELS[action]}
-                        </th>
+                      {CRUD_ACTIONS.map((a) => (
+                        <th key={a} style={{ textAlign: 'center' }}>{CRUD_LABELS[a]}</th>
                       ))}
                     </tr>
                   </thead>
@@ -581,40 +562,25 @@ export default function UsersPage() {
                       const tabVisible = editedTabPerms[selectedRoleId]?.[tab] ?? false;
                       return (
                         <tr key={tab}>
-                          <td style={{ fontWeight: 600, fontSize: '12.5px' }}>
-                            {TAB_LABELS[tab]}
-                          </td>
+                          <td style={{ fontWeight: 600, fontSize: '12.5px' }}>{TAB_LABELS[tab]}</td>
                           <td style={{ textAlign: 'center' }}>
                             <input
                               type="checkbox"
                               checked={tabVisible}
-                              onChange={(e) =>
-                                handleTabToggle(selectedRoleId, tab, e.target.checked)
-                              }
+                              onChange={(e) => handleTabToggle(selectedRoleId, tab, e.target.checked)}
                               style={{ accentColor: 'var(--or)' }}
                             />
                           </td>
-                          {CRUD_ACTIONS.map((action) => {
-                            const checked =
-                              editedCrudPerms[selectedRoleId]?.[tab]?.[action] ?? false;
-                            return (
-                              <td key={action} style={{ textAlign: 'center' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={(e) =>
-                                    handleCrudToggle(
-                                      selectedRoleId,
-                                      tab,
-                                      action,
-                                      e.target.checked,
-                                    )
-                                  }
-                                  style={{ accentColor: 'var(--or)' }}
-                                />
-                              </td>
-                            );
-                          })}
+                          {CRUD_ACTIONS.map((action) => (
+                            <td key={action} style={{ textAlign: 'center' }}>
+                              <input
+                                type="checkbox"
+                                checked={editedCrudPerms[selectedRoleId]?.[tab]?.[action] ?? false}
+                                onChange={(e) => handleCrudToggle(selectedRoleId, tab, action, e.target.checked)}
+                                style={{ accentColor: 'var(--or)' }}
+                              />
+                            </td>
+                          ))}
                         </tr>
                       );
                     })}
@@ -623,7 +589,6 @@ export default function UsersPage() {
               </div>
             )}
 
-            {/* ── Save button (non-SuperAdmin only) ────────────────────────── */}
             {selectedRoleId && !isSuperAdminSelected && (
               <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <button
@@ -634,14 +599,111 @@ export default function UsersPage() {
                   {savingRoleId === selectedRoleId ? 'Saving…' : 'Save Permissions'}
                 </button>
                 {!dirtyRoles.has(selectedRoleId) && (
-                  <span style={{ fontSize: '11px', color: 'var(--t3)' }}>
-                    No unsaved changes
-                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--t3)' }}>No unsaved changes</span>
                 )}
               </div>
             )}
           </>
         )}
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* CHANGE PASSWORD MODAL                                               */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      <div
+        className={`${styles.ov}${pwdUserId ? ` ${styles.open}` : ''}`}
+        onClick={closePwdModal}
+      >
+        <div
+          className={styles.modal}
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: '400px' }}
+        >
+          <button className={styles['mc-x']} onClick={closePwdModal}>✕</button>
+          <div className={styles.mt}>Change Password</div>
+          <div className={styles.ms}>
+            Set a new password for <strong>{pwdUsername}</strong>.
+          </div>
+
+          <div className={styles.fl}>
+            <label>New Password</label>
+            <input
+              className={styles.fi}
+              type="password"
+              placeholder="Min. 8 characters"
+              value={pwdValue}
+              onChange={(e) => setPwdValue(e.target.value)}
+              disabled={pwdLoading}
+              autoFocus
+            />
+          </div>
+
+          {pwdError && (
+            <div style={{
+              marginBottom: '12px', padding: '8px 12px', borderRadius: '6px', fontSize: '12px',
+              background: 'var(--rdp)', border: '1px solid var(--rd)', color: 'var(--rd)',
+            }}>
+              {pwdError}
+            </div>
+          )}
+
+          <div className={styles.mf}>
+            <button
+              className={`${styles.mb} ${styles.can}`}
+              onClick={closePwdModal}
+              disabled={pwdLoading}
+            >
+              Cancel
+            </button>
+            <button
+              className={`${styles.mb} ${styles.sub}`}
+              onClick={handleChangePassword}
+              disabled={pwdLoading || pwdValue.length < 8}
+            >
+              {pwdLoading ? 'Saving…' : 'Update Password'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* DELETE CONFIRM MODAL                                                */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      <div
+        className={`${styles.ov}${deleteUserId ? ` ${styles.open}` : ''}`}
+        onClick={closeDeleteConfirm}
+      >
+        <div
+          className={styles.modal}
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: '380px' }}
+        >
+          <button className={styles['mc-x']} onClick={closeDeleteConfirm}>✕</button>
+          <div className={styles.mt}>Delete User</div>
+          <div className={styles.ms}>This action cannot be undone.</div>
+
+          <p style={{ fontSize: '13px', color: 'var(--t2)', marginBottom: '4px' }}>
+            Are you sure you want to delete <strong>{deleteUsername}</strong>?
+          </p>
+
+          <div className={styles.mf}>
+            <button
+              className={`${styles.mb} ${styles.can}`}
+              onClick={closeDeleteConfirm}
+              disabled={deleteLoading}
+            >
+              Cancel
+            </button>
+            <button
+              className={styles.mb}
+              style={{ background: 'var(--rd)', color: '#fff' }}
+              onClick={handleDeleteUser}
+              disabled={deleteLoading}
+            >
+              {deleteLoading ? 'Deleting…' : 'Delete User'}
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );
