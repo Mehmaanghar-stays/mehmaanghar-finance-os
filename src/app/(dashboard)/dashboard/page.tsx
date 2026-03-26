@@ -42,6 +42,7 @@ export interface SerializableProperty {
   city: string;
   comm: number;
   capital: number;
+  assets: Array<{ name: string; amount: number; type: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +92,7 @@ export default async function DashboardPage() {
 
   // Fetch properties for lookup (name, city, comm, capital).
   const rawProperties = await prisma.property.findMany({
-    select: { id: true, name: true, city: true, comm: true, capital: true },
+    select: { id: true, name: true, city: true, comm: true, capital: true, assets: true },
     orderBy: { name: 'asc' },
   });
 
@@ -101,9 +102,36 @@ export default async function DashboardPage() {
     city: p.city,
     comm: Number(p.comm),
     capital: Number(p.capital),
+    assets: (p.assets as Array<{ name: string; amount: number; type: string }>) ?? [],
   }));
 
+  // Fetch expense goal for current month from UtilsSetting.
+  // Key: targets_{year}_{month} — shared with Smart Insights targets.
+  // The expense_limit field is the Dashboard Expense Goal.
+  const now        = new Date();
+  const cM         = now.getMonth() + 1;
+  const cY         = now.getFullYear();
+  const targetKey  = `targets_${cY}_${cM}`;
+  let initialExpenseGoal = 0;
+  try {
+    const setting = await prisma.utilsSetting.findUnique({
+      where: { key: targetKey },
+    });
+    if (setting?.value && typeof setting.value === 'object') {
+      const v = setting.value as Record<string, unknown>;
+      initialExpenseGoal = Number(v.expense_limit ?? 0) || 0;
+    }
+  } catch {
+    // No row yet — goal starts at 0 (not set)
+  }
+
   return (
-    <DashboardClient reports={reports} properties={properties} />
+    <DashboardClient
+      reports={reports}
+      properties={properties}
+      initialExpenseGoal={initialExpenseGoal}
+      goalMonth={cM}
+      goalYear={cY}
+    />
   );
 }

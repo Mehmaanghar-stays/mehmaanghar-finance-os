@@ -13,6 +13,9 @@
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD } from '@/lib/period';
 import type { RepRow } from '@/lib/period';
 import { Pagination } from '@/components/ui/Pagination';
@@ -33,13 +36,13 @@ const PAGE_SIZE = 20;
 // ---------------------------------------------------------------------------
 
 function fI(n: number): string {
-  if (!n && n !== 0) return '₹0';
+  if (!n && n !== 0) return '₹0.00';
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
-const fF = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fF = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const MN = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
 
 // ---------------------------------------------------------------------------
@@ -78,36 +81,55 @@ export function PropertiesClient({
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelProp, setPanelProp] = useState<SerializableProperty | null>(null);
 
-  // ── Period store ──────────────────────────────────────────────────────────
-  const { getFilteredReps } = usePeriod();
+  // ── Period store + per-page filters ───────────────────────────────────────
+  const { getFilteredReps, ...periodState } = usePeriod();
+  const filters = usePageFilters({ city: true, property: true, comm: true });
 
   const propMap = useMemo(
     () => Object.fromEntries(initialProperties.map((p) => [p.id, p])),
     [initialProperties],
   );
   const propById = (pid: string) =>
-    propMap[pid]
-      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
-      : null;
+    propMap[pid] ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm } : null;
 
   const allReps = reports as RepRow[];
 
-  // Filtered reps for current period
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: filters.comm }),
+    [filters.city, filters.property, filters.comm],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(initialProperties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [initialProperties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => initialProperties.map((p) => ({ value: p.id, label: p.name })),
+    [initialProperties],
+  );
+
+  // Filtered reps for current period — includes comm filter for Properties
   const filteredReps = useMemo(
-    () => getFilteredReps(allReps, propById),
+    () => getFilteredReps(allReps, propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, JSON.stringify(propMap)],
+    [allReps, JSON.stringify(propMap), pageFilterState,
+     periodState.cPType, periodState.cM, periodState.cY,
+     periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
+     periodState.cDay, periodState.cWeek],
   );
 
   // Per-property aggregate lookup: pid → withD result
+  // capital is passed as the second arg so calcROI() returns a real value.
   const propAggMap = useMemo(() => {
     const m: Record<string, ReturnType<typeof withD>> = {};
     initialProperties.forEach((p) => {
       const pReps = filteredReps.filter((r) => r.pid === p.id);
-      m[p.id] = pReps.length ? withD(aggReps(pReps)) : null;
+      m[p.id] = pReps.length
+        ? withD(aggReps(pReps, () => propMap[p.id]?.capital ?? 0))
+        : null;
     });
     return m;
-  }, [filteredReps, initialProperties]);
+  }, [filteredReps, initialProperties, propMap]);
 
   // All-time report count per property
   const totalRepCount = useMemo(() => {
@@ -120,12 +142,6 @@ export function PropertiesClient({
   const totalPages = Math.max(1, Math.ceil(initialProperties.length / PAGE_SIZE));
   const safePageNum = Math.min(page, totalPages);
   const paginated = initialProperties.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
-
-  // ── Known cities for datalist ─────────────────────────────────────────────
-  const knownCities = useMemo(
-    () => [...new Set(initialProperties.map((p) => p.city).filter(Boolean))].sort(),
-    [initialProperties],
-  );
 
   // ── Open add modal ────────────────────────────────────────────────────────
   function handleAdd() {
@@ -224,7 +240,12 @@ export function PropertiesClient({
 
   return (
     <>
-      {/* ── Table card ────────────────────────────────────────────────────── */}
+      <PageFilterBar
+        filters={filters}
+        config={{ city: true, property: true, comm: true }}
+        cities={cityOptions}
+        properties={propOptions}
+      />
       <div className="tw">
         {/* Header */}
         <div className="th">
@@ -322,8 +343,8 @@ export function PropertiesClient({
                         {/* ROI */}
                         <td>
                           {lR ? (
-                            <span style={{ fontWeight: 800, color: (lR.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)' }}>
-                              {lR.roiDisplay ?? (lR.roi + '%')}
+                            <span style={{ fontWeight: 800, color: lR.roi !== null && (lR.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)' }}>
+                              {lR.roiDisplay ?? (lR.roi !== null ? lR.roi.toFixed(2) + '%' : 'N/A')}
                             </span>
                           ) : '—'}
                         </td>
@@ -379,7 +400,6 @@ export function PropertiesClient({
         onClose={() => setModalOpen(false)}
         editId={editId}
         initialValues={editValues}
-        knownCities={knownCities}
         onSave={handleSave}
         isSaving={isSaving}
       />
@@ -408,7 +428,7 @@ export function PropertiesClient({
                 <div className="dp-k"><div className="dp-kl">Commission ({panelProp.comm}%)</div><div className="dp-kv" style={{ color: 'var(--or)' }}>{fI(panelLatestRep.commission)}</div><div className="dp-ks">of op. profit</div></div>
                 <div className="dp-k"><div className="dp-kl">Investor Net</div><div className="dp-kv" style={{ color: 'var(--bl)' }}>{fI(panelLatestRep.invProfit)}</div></div>
                 <div className="dp-k"><div className="dp-kl">Occupancy</div><div className="dp-kv" style={{ color: (panelLatestRep.occ ?? 0) >= 75 ? 'var(--gr)' : 'var(--go)' }}>{panelLatestRep.occ ?? 0}%</div></div>
-                <div className="dp-k"><div className="dp-kl">ROI</div><div className="dp-kv" style={{ color: 'var(--t3)' }}>N/A</div></div>
+                <div className="dp-k"><div className="dp-kl">ROI</div><div className="dp-kv" style={{ color: panelLatestRep.roi !== null ? ((panelLatestRep.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)') : 'var(--t3)' }}>{panelLatestRep.roi !== null ? (panelLatestRep.roi ?? 0).toFixed(2) + '%' : 'N/A'}</div></div>
                 <div className="dp-k"><div className="dp-kl">ADR</div><div className="dp-kv">{fI(panelLatestRep.adr ?? 0)}</div></div>
                 <div className="dp-k"><div className="dp-kl">RevPAR</div><div className="dp-kv">{fI(panelLatestRep.revpar ?? 0)}</div></div>
               </div>
@@ -471,9 +491,9 @@ function ReportHistory({ reps }: { reps: SerializableReport[] }) {
   const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const fI = (n: number) => {
     const v = Math.abs(n);
-    if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-    if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-    return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+    if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+    if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+    return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
   };
 
   return (

@@ -6,39 +6,97 @@
 //  1. Collapsible report list (toggleRepList + rndReports)
 //     - Period-filtered, sorted newest-first, paginated (PAGE_SIZE=20)
 //     - Rows: property name + period, KPI meta line, 👁 snapshot + ↓ CSV
-//     - Snapshot opens a DetailPanel with the full calcF() output
+//     - 👁 opens a DetailPanel slide-in with full calcF() output
+//     - ↓ generates a CSV client-side from the report row data (no server call)
 //
 //  2. Generate Reports card grid (6 export-type cards)
 //     - Each calls POST /api/exports — wired in Phase 6 API layer
 //
-// Monthly Entry is now a standalone page at /monthlyentry.
-// All MonthlyEntryModal state, the canMonthlyEntry prop, MonthlyEntryModalTrigger,
-// and the window.__openMonthlyEntry global have been removed from this file.
+// FIX (Bug 12): propById was () => null — city/property filters broken.
+//               Per-row ↓ now generates CSV client-side immediately.
+//               Empty state has a "Regenerate" button.
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import type { RepRow } from '@/lib/period';
 import { Pagination } from '@/components/ui/Pagination';
 import { DetailPanel } from '@/components/ui/DetailPanel';
-import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
+import { useToast } from '@/components/ui/Toast';
+import type { SerializableReport, SerializableProperty } from '../dashboard/page';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 20; // verbatim from HTML
+const PAGE_SIZE = 20;
 
 // ---------------------------------------------------------------------------
-// Formatting helpers
+// Formatting helpers — 2 decimal places throughout
 // ---------------------------------------------------------------------------
 
 function fIN(n: number) {
-  return '₹' + Math.round(n || 0).toLocaleString('en-IN');
+  return '₹' + (Number(n) || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 const MN = ['','January','February','March','April','May','June',
             'July','August','September','October','November','December'];
+
+// ---------------------------------------------------------------------------
+// csvDownload — builds a CSV from one report row and triggers browser download
+// ---------------------------------------------------------------------------
+
+function csvDownload(rep: SerializableReport, propName: string) {
+  const rows = [
+    ['Field', 'Value'],
+    ['Property', propName],
+    ['Period', `${MN[rep.month]} ${rep.year}`],
+    ['Revenue', rep.rev],
+    ['Expenses', rep.exp],
+    ['Operating Profit', rep.opProfit],
+    ['Commission', rep.commission],
+    ['Investor Profit', rep.invProfit],
+    ['Nights', rep.nights],
+    ['Occupancy %', rep.occ],
+    ['ADR', rep.adr ?? 0],
+    ['RevPAR', rep.revpar ?? 0],
+    ['ROI %', rep.roi ?? 0],
+  ];
+
+  // Append expense categories
+  if (rep.expCats && Object.keys(rep.expCats).length) {
+    rows.push(['', '']);
+    rows.push(['Expense Category', 'Amount']);
+    Object.entries(rep.expCats).forEach(([k, v]) => rows.push([k, v]));
+  }
+
+  // Append channels
+  if (rep.channels && Object.keys(rep.channels).length) {
+    rows.push(['', '']);
+    rows.push(['Booking Channel', 'Nights']);
+    Object.entries(rep.channels).forEach(([k, v]) => rows.push([k, v]));
+  }
+
+  const csv = rows
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `mg-report-${propName.replace(/\s+/g, '-')}-${rep.year}-${String(rep.month).padStart(2, '0')}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // ---------------------------------------------------------------------------
 // Export card config — verbatim from the HTML card grid
@@ -70,13 +128,19 @@ export function ReportsClient({
   reports,
   properties,
 }: ReportsClientProps) {
-  const { getFilteredReps } = usePeriod();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [, startTransition] = useTransition();
+
+  const { getFilteredReps, ...periodState } = usePeriod();
+  const filters = usePageFilters({ city: true, property: true });
 
   // ── Local state ───────────────────────────────────────────────────────────
-  const [listOpen, setListOpen]         = useState(false);
+  const [listOpen, setListOpen]         = useState(true);
   const [page, setPage]                 = useState(1);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotRep, setSnapshotRep]   = useState<SerializableReport | null>(null);
+  const [isRegen, setIsRegen]           = useState(false);
 
   // ── Property lookup ───────────────────────────────────────────────────────
   const propMap = useMemo(
@@ -84,13 +148,35 @@ export function ReportsClient({
     [properties],
   );
 
+  const propById = useMemo(
+    () => (pid: string) => propMap[pid]
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+      : null,
+    [propMap],
+  );
+
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: 'all' }),
+    [filters.city, filters.property],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
+
   // ── Period-filtered + sorted reports ─────────────────────────────────────
   const filteredReps = useMemo(
-    // SerializableReport is structurally compatible with RepRow (same fields,
-    // minus the optional _autoGen flag). Cast is safe.
-    () => getFilteredReps(reports as RepRow[], () => null),
+    () => getFilteredReps(reports as RepRow[], propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reports],
+    [reports, propById, pageFilterState,
+     periodState.cPType, periodState.cM, periodState.cY,
+     periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
+     periodState.cDay, periodState.cWeek],
   );
 
   const sortedReps = useMemo(
@@ -102,13 +188,33 @@ export function ReportsClient({
   const safePage   = Math.min(page, totalPages);
   const paginated  = sortedReps.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  // ── Toggle list — verbatim toggleRepList() ────────────────────────────────
+  // ── Toggle list ───────────────────────────────────────────────────────────
   function handleToggleList() {
     if (!listOpen) setPage(1);
     setListOpen((v) => !v);
   }
 
-  // ── Export — calls /api/exports (Phase 6) ─────────────────────────────────
+  // ── Regenerate reports ────────────────────────────────────────────────────
+  async function handleRegen() {
+    setIsRegen(true);
+    try {
+      const res = await fetch('/api/regen-reports', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(err.error ?? 'Regeneration failed', 'er');
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      toast(`✓ ${data.count ?? 'Reports'} regenerated successfully`, 'ok');
+      startTransition(() => router.refresh());
+    } catch {
+      toast('Network error — please try again', 'er');
+    } finally {
+      setIsRegen(false);
+    }
+  }
+
+  // ── Export (server-side bulk) ─────────────────────────────────────────────
   async function handleExport(type: string) {
     try {
       const res = await fetch('/api/exports', {
@@ -116,37 +222,46 @@ export function ReportsClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type }),
       });
-      if (!res.ok) {
-        alert('Export failed — API not yet wired (Phase 6)');
-        return;
-      }
+      if (!res.ok) { toast('Export failed', 'er'); return; }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
       a.download = `mg-${type}-export.csv`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch {
-      alert('Export API not yet available — wired in Phase 6.');
+      toast('Export API not available', 'er');
     }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
       {/* ══ Section 1: Collapsible Report List ════════════════════════════ */}
       <div
         className="stl"
-        style={{ cursor: 'pointer', userSelect: 'none' }}
-        onClick={handleToggleList}
+        style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <div className="d" />
-        <span style={{ marginRight: '4px' }}>{listOpen ? '▼' : '▶'}</span>
-        Auto-Generated Reports{' '}
-        <span style={{ fontSize: '10px', color: 'var(--t3)', fontWeight: 400 }}>
-          ({filteredReps.length} for current period)
+        <span onClick={handleToggleList} style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+          <div className="d" />
+          <span>{listOpen ? '▼' : '▶'}</span>
+          Auto-Generated Reports{' '}
+          <span style={{ fontSize: '10px', color: 'var(--t3)', fontWeight: 400 }}>
+            ({filteredReps.length} for current period)
+          </span>
         </span>
+        <button
+          className="btn btn-g btn-sm"
+          style={{ fontSize: '11px' }}
+          onClick={handleRegen}
+          disabled={isRegen}
+        >
+          {isRegen ? '…' : '↻ Regenerate'}
+        </button>
       </div>
 
       {listOpen && (
@@ -160,39 +275,52 @@ export function ReportsClient({
               <div className="es-ico">📄</div>
               <div className="es-t">No Reports for This Period</div>
               <div className="es-s">
-                Change the period filter or add bookings/expenses.
+                {reports.length === 0
+                  ? 'No reports exist yet. Add bookings via Monthly Entry, then click Regenerate.'
+                  : 'Change the period filter or click Regenerate to rebuild reports.'}
               </div>
+              <button
+                className="btn btn-or btn-sm"
+                onClick={handleRegen}
+                disabled={isRegen}
+                style={{ marginTop: '12px' }}
+              >
+                {isRegen ? 'Regenerating…' : '↻ Regenerate Reports'}
+              </button>
             </div>
           ) : (
             <>
-              {/* Report rows — verbatim from rndReports() */}
+              {/* Report rows */}
               {paginated.map((r) => {
                 const prop = propMap[r.pid];
+                const propName = prop?.name ?? 'Unknown';
                 return (
                   <div key={r.id} className="rrow">
                     <div className="rico">📄</div>
                     <div className="rinfo">
                       <div className="rname">
-                        {prop?.name ?? 'Unknown'} — {MN[r.month]} {r.year}
+                        {propName} — {MN[r.month]} {r.year}
                       </div>
                       <div className="rmeta">
-                        Rev: {fIN(r.rev)} · Exp: {fIN(r.exp)} · Profit: {fIN(r.opProfit)} · Occ: {r.occ ?? 0}% · ROI: {r.roi ?? 0}%
+                        Rev: {fIN(r.rev)} · Exp: {fIN(r.exp)} · Profit: {fIN(r.opProfit)} · Occ: {(r.occ ?? 0).toFixed(1)}% · ROI: {r.roi !== null ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A'}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                      {/* View — opens slide-in DetailPanel */}
                       <button
                         className="btn btn-g btn-sm"
                         title="View snapshot"
                         onClick={() => { setSnapshotRep(r); setSnapshotOpen(true); }}
                       >
-                        👁
+                        👁 View
                       </button>
+                      {/* Download — client-side CSV, no server call */}
                       <button
                         className="btn btn-g btn-sm"
-                        title="Export CSV"
-                        onClick={() => handleExport('property')}
+                        title="Download CSV"
+                        onClick={() => csvDownload(r, propName)}
                       >
-                        ↓
+                        ↓ CSV
                       </button>
                     </div>
                   </div>
@@ -236,7 +364,7 @@ export function ReportsClient({
         ))}
       </div>
 
-      {/* ══ Report Snapshot Detail Panel ═══════════════════════════════════ */}
+      {/* ══ Report Snapshot Detail Panel — slide in from right ═════════════ */}
       <DetailPanel
         isOpen={snapshotOpen}
         onClose={() => setSnapshotOpen(false)}
@@ -269,15 +397,16 @@ function ReportSnapshot({
   const prop = propMap[rep.pid];
 
   const KPI_ROWS = [
-    { l: 'Revenue',                           v: fIN(rep.rev),          c: 'var(--tx)' },
-    { l: 'Expenses',                          v: fIN(rep.exp),          c: 'var(--rd)' },
-    { l: 'Op. Profit',                        v: fIN(rep.opProfit),     c: 'var(--gr)' },
-    { l: `Commission (${prop?.comm ?? 25}%)`, v: fIN(rep.commission),   c: 'var(--or)' },
-    { l: 'Investor Net',                      v: fIN(rep.invProfit),    c: 'var(--bl)' },
-    { l: 'Occupancy',                         v: (rep.occ ?? 0) + '%', c: 'var(--go)' },
-    { l: 'ROI',                               v: (rep.roi ?? 0) + '%', c: 'var(--or)' },
-    { l: 'ADR',                               v: fIN(rep.adr ?? 0),    c: 'var(--tx)' },
-    { l: 'RevPAR',                            v: fIN(rep.revpar ?? 0), c: 'var(--gr)' },
+    { l: 'Revenue',                           v: fIN(rep.rev),                                                      c: 'var(--tx)' },
+    { l: 'Expenses',                          v: fIN(rep.exp),                                                      c: 'var(--rd)' },
+    { l: 'Op. Profit',                        v: fIN(rep.opProfit),                                                 c: 'var(--gr)' },
+    { l: `Commission (${prop?.comm ?? 25}%)`, v: fIN(rep.commission),                                               c: 'var(--or)' },
+    { l: 'Investor Net',                      v: fIN(rep.invProfit),                                                c: 'var(--bl)' },
+    { l: 'Nights',                            v: String(rep.nights ?? 0),                                          c: 'var(--tx)' },
+    { l: 'Occupancy',                         v: (rep.occ ?? 0).toFixed(1) + '%',                                  c: 'var(--go)' },
+    { l: 'ROI',                               v: rep.roi !== null ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',       c: 'var(--or)' },
+    { l: 'ADR',                               v: fIN(rep.adr ?? 0),                                                c: 'var(--tx)' },
+    { l: 'RevPAR',                            v: fIN(rep.revpar ?? 0),                                             c: 'var(--gr)' },
   ];
 
   return (
@@ -339,3 +468,9 @@ function ReportSnapshot({
     </>
   );
 }
+//
+//  1. Collapsible report list (toggleRepList + rndReports)
+//     - Period-filtered, sorted newest-first, paginated (PAGE_SIZE=20)
+//     - Rows: property name + period, KPI meta line, 👁 snapshot + ↓ CSV
+//     - Snapshot opens a DetailPanel with the full calcF() output
+//

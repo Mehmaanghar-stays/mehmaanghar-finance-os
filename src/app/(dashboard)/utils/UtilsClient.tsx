@@ -54,7 +54,7 @@ type UtilTab = 'rent' | 'electricity' | 'custom';
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-const fIN = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MS_OPTS = [
   { v: 'all', l: 'All Months' },
@@ -143,11 +143,13 @@ export function UtilsClient({
     return items;
   }, [entries, filterProp, filterMonth, filterYear]);
 
-  const rentPending  = allFiltered.filter((u) => u.type === 'rent'        && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
-  const elecPending  = allFiltered.filter((u) => u.type === 'electricity' && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
-  const totalAll     = allFiltered.reduce((s, u) => s + u.amount, 0);
-  const paidAll      = allFiltered.filter((u) => u.status === 'paid').reduce((s, u) => s + u.amount, 0);
-  const paidPct      = totalAll > 0 ? Math.round((paidAll / totalAll) * 100) : 0;
+  const rentPending   = allFiltered.filter((u) => u.type === 'rent'        && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
+  const elecPending   = allFiltered.filter((u) => u.type === 'electricity' && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
+  const customPending = allFiltered.filter((u) => u.type === 'custom'      && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
+  const totalPending  = rentPending + elecPending + customPending;
+  const totalAll      = allFiltered.reduce((s, u) => s + u.amount, 0);
+  const paidAll       = allFiltered.filter((u) => u.status === 'paid').reduce((s, u) => s + u.amount, 0);
+  const paidPct       = totalAll > 0 ? Math.round((paidAll / totalAll) * 100) : 0;
 
   // ── Year options (current year ±5) ────────────────────────────────────────
   const yearOpts = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
@@ -253,8 +255,8 @@ export function UtilsClient({
         )}
       </div>
 
-      {/* ── 3 KPI cards — verbatim from utilKpis innerHTML ───────────────── */}
-      <div className="rg3" style={{ marginBottom: '14px' }}>
+      {/* ── 4 KPI cards ──────────────────────────────────────────────────── */}
+      <div className="rg4" style={{ marginBottom: '14px' }}>
         {/* Rent Pending */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--rd)', marginBottom: '4px' }}>Rent Pending</div>
@@ -271,6 +273,14 @@ export function UtilsClient({
           <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(paidAll)} of {fIN(totalAll)}</div>
           <div style={{ background: 'var(--s2)', borderRadius: '6px', height: '6px', marginTop: '6px', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${paidPct}%`, background: 'var(--gr)', borderRadius: '6px' }} />
+          </div>
+        </div>
+        {/* Total Bills Pending — NEW (Bug 18) */}
+        <div className="cc" style={{ padding: '14px', border: '1.5px solid var(--bdr)' }}>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--bl)', marginBottom: '4px' }}>Total Bills Pending</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--bl)', wordBreak: 'break-word' }}>{fIN(totalPending)}</div>
+          <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '4px' }}>
+            Rent + Electricity{customPending > 0 ? ' + Custom' : ''}
           </div>
         </div>
       </div>

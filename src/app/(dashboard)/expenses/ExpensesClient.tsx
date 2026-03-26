@@ -19,6 +19,9 @@ import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD, getFYMonths } from '@/lib/period';
 import type { RepRow, PeriodState } from '@/lib/period';
 import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
@@ -37,11 +40,11 @@ const ExpenseCharts = dynamic(
 // ---------------------------------------------------------------------------
 
 function fI(n: number): string {
-  if (!n && n !== 0) return '₹0';
+  if (!n && n !== 0) return '₹0.00';
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
 
 const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -106,32 +109,35 @@ function getPeriodMonths(
 }
 
 // ---------------------------------------------------------------------------
-// getPrevPeriodReps — verbatim port
+// getPrevPeriodReps — verbatim port (propById passed through)
 // ---------------------------------------------------------------------------
+
+type PropByIdFn = (pid: string) => { id: string; city: string; comm: number } | null;
 
 function getPrevReps(
   period: PeriodState,
   allReps: RepRow[],
-  getForMonth: (reps: RepRow[], propById: (pid: string) => null, m: number, y: number) => RepRow[],
+  getForMonth: (reps: RepRow[], propById: PropByIdFn, m: number, y: number) => RepRow[],
+  propById: PropByIdFn,
 ): RepRow[] {
   const { cPType, cM, cY, cQ, cFY } = period;
   switch (cPType) {
     case 'monthly': {
       let pm = cM - 1; let py = cY;
       if (pm < 1) { pm = 12; py--; }
-      return getForMonth(allReps, () => null, pm, py);
+      return getForMonth(allReps, propById, pm, py);
     }
     case 'quarterly': {
       const pq  = cQ === 1 ? 4 : cQ - 1;
       const pqy = cQ === 1 ? cFY - 1 : cFY;
       const months = Q_MONTHS[pq] ?? [];
       const yr = pq === 4 ? pqy + 1 : pqy;
-      return months.flatMap((m) => getForMonth(allReps, () => null, m, yr));
+      return months.flatMap((m) => getForMonth(allReps, propById, m, yr));
     }
     case 'fy': {
       const prevFY = getFYMonths(cFY - 1);
       return prevFY.flatMap(({ month: m, year: y }) =>
-        getForMonth(allReps, () => null, m, y),
+        getForMonth(allReps, propById, m, y),
       );
     }
     default:
@@ -223,8 +229,9 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
   const [expPropId, setExpPropId]     = useState('');
   const [trendMode, setTrendMode]     = useState<'total' | 'category'>('total');
 
-  // ── Period store ──────────────────────────────────────────────────────────
+  // ── Period store + per-page filters ───────────────────────────────────────
   const { getFilteredReps, getFilteredRepsForMonth, ...periodState } = usePeriod();
+  const filters = usePageFilters({ city: true, property: true });
   const allReps = reports as RepRow[];
 
   const propMap = useMemo(
@@ -232,13 +239,39 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
     [properties],
   );
 
-  // ── Period-filtered reps + optional property filter ───────────────────────
+  const propById = useMemo(
+    () => (pid: string) => propMap[pid]
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+      : null,
+    [propMap],
+  );
+
+  const getCapital = useMemo(
+    () => (pid: string) => propMap[pid]?.capital ?? 0,
+    [propMap],
+  );
+
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: 'all' }),
+    [filters.city, filters.property],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
+
+  // ── Period-filtered reps + optional property-wise view filter ─────────────
   const baseReps = useMemo(
-    () => getFilteredReps(allReps, () => null),
+    () => getFilteredReps(allReps, propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, periodState.cPType, periodState.cM, periodState.cY,
+    [allReps, propById, pageFilterState, periodState.cPType, periodState.cM, periodState.cY,
      periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
-     periodState.cDay, periodState.cWeek, periodState.cCi, periodState.cPid, periodState.cComm],
+     periodState.cDay, periodState.cWeek],
   );
 
   const filteredReps = useMemo(
@@ -249,19 +282,22 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
   );
 
   // ── Aggregates ────────────────────────────────────────────────────────────
-  const agg  = useMemo(() => withD(aggReps(filteredReps)), [filteredReps]);
+  const agg  = useMemo(
+    () => withD(aggReps(filteredReps, getCapital)),
+    [filteredReps, getCapital],
+  );
   const cats = useMemo(() => aggExpCats(filteredReps), [filteredReps]);
 
   // Previous period for comparison
   const prevReps = useMemo(
-    () => getPrevReps(periodState as PeriodState, allReps, getFilteredRepsForMonth),
+    () => getPrevReps(periodState as PeriodState, allReps, getFilteredRepsForMonth, propById),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, periodState.cPType, periodState.cM, periodState.cY,
+    [allReps, propById, periodState.cPType, periodState.cM, periodState.cY,
      periodState.cQ, periodState.cFY],
   );
   const prevAgg = useMemo(
-    () => (prevReps.length ? withD(aggReps(prevReps)) : null),
-    [prevReps],
+    () => (prevReps.length ? withD(aggReps(prevReps, getCapital)) : null),
+    [prevReps, getCapital],
   );
 
   // ── Derived values ────────────────────────────────────────────────────────
@@ -285,21 +321,20 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
 
   const trendPoints: ExpTrendPoint[] = useMemo(() => {
     return trendPeriods.map(({ m, y, l }) => {
-      let prs = getFilteredRepsForMonth(allReps, () => null, m, y);
+      let prs = getFilteredRepsForMonth(allReps, propById, m, y, pageFilterState);
       if (expView === 'property' && expPropId)
         prs = prs.filter((r) => r.pid === expPropId);
-      const pa = withD(aggReps(prs));
+      const pa = withD(aggReps(prs, getCapital));
       const pc = aggExpCats(prs);
       return {
         l,
-        rev: Math.round((pa?.rev ?? 0) / 1000),
-        exp: Math.round((pa?.exp ?? 0) / 1000),
+        rev: pa?.rev ?? 0,
+        exp: pa?.exp ?? 0,
         cats: pc,
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendPeriods, allReps, expView, expPropId,
-      periodState.cCi, periodState.cPid, periodState.cComm]);
+  }, [trendPeriods, allReps, propById, getCapital, expView, expPropId, pageFilterState]);
 
   // ── Insights ──────────────────────────────────────────────────────────────
   const insights = useMemo(
@@ -329,25 +364,29 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
   }, [baseReps, properties, portfolioRatio, agg]);
 
   // ── Empty state ───────────────────────────────────────────────────────────
-  if (!filteredReps.length) {
+  if (!filteredReps.length || !agg || agg.exp === 0) {
     return (
-      <div id="exp-empty" className="es">
-        <div className="es-ico">📊</div>
-        <div className="es-t">No Expense Data for This Period</div>
-        <div className="es-s">
-          Expense data is pulled automatically from reports. Ensure reports for
-          the selected period have expense categories filled in.
+      <>
+        <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
+        <div id="exp-empty" className="es">
+          <div className="es-ico">📊</div>
+          <div className="es-t">No Expense Data for This Period</div>
+          <div className="es-s">
+            Expense data is derived from saved reports. Add daily expenses or use
+            Monthly Entry to record expenses, then reports will generate automatically.
+          </div>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '4px' }}>
+            <Link href="/dailyexp" className="btn btn-or">+ Daily Expense</Link>
+            <Link href="/monthlyentry" className="btn btn-g">+ Monthly Entry</Link>
+          </div>
         </div>
-        <Link href="/bookings" className="btn btn-or">+ Add Booking</Link>
-      </div>
+      </>
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div id="exp-content">
-
-      {/* ── View toggle + property filter ──────────────────────────────── */}
+      <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Expense Intelligence

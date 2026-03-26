@@ -2,22 +2,17 @@
 //
 // Cash Flow page — Server Component shell.
 //
-// Fetches all Report rows and passes them as serializable props to
-// <CashFlowClient />, which applies period filtering client-side.
-//
-// HTML source: <div class="page" id="page-cashflow">
-// JS source:   rndCashflow()
-//
-// NOTE: Report rows are shared with the dashboard page. They use the same
-// SerializableReport type defined in dashboard/page.tsx — imported from
-// there to keep the shape DRY.
+// Fetches Report rows + Property rows and passes both to <CashFlowClient />.
+// Properties are needed so the PageFilterBar can populate city/property
+// dropdowns and propById can resolve city+comm for filter logic.
 
 import { prisma } from '@/lib/db';
 import type { SerializableReport } from '../dashboard/page';
+import type { SerializableProperty } from '../properties/page';
 import { CashFlowClient } from './CashFlowClient';
 
 export default async function CashFlowPage() {
-  // Fetch all report rows — same query as the dashboard page.
+  // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({
     select: {
       id: true,
@@ -49,10 +44,29 @@ export default async function CashFlowPage() {
       roi:        Number(d.roi         ?? 0),
       adr:        Number(d.adr         ?? 0),
       revpar:     Number(d.revpar      ?? 0),
-      channels:   (d.channels  as Record<string, number>) ?? {},
-      expCats:    (d.expCats   as Record<string, number>) ?? {},
+      channels:   (d.channels as Record<string, number>) ?? {},
+      expCats:    (d.expCats  as Record<string, number>) ?? {},
     }];
   });
 
-  return <CashFlowClient reports={reports} />;
+  // ── Fetch properties (needed for city/property filter dropdowns) ──────────
+  const rawProps = await prisma.property.findMany({
+    select: { id: true, name: true, city: true, comm: true, capital: true },
+    orderBy: { name: 'asc' },
+  });
+
+  const properties: SerializableProperty[] = rawProps.map((p) => ({
+    id:      p.id,
+    name:    p.name,
+    city:    p.city ?? '',
+    state:   '',
+    comm:    Number(p.comm)    || 25,
+    capital: Number(p.capital) || 0,
+    address: null,
+    type:    '',
+    rooms:   0,
+    assets:  [],
+  }));
+
+  return <CashFlowClient reports={reports} properties={properties} />;
 }

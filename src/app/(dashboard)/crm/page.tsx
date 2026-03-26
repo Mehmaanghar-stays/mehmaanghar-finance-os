@@ -56,6 +56,7 @@ export interface SerializableGuestBooking {
   nights: number;
   revenue: number;
   platform: string;
+  rating: number | null;  // Guest rating 1–5 from booking
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,7 @@ export default async function CrmPage() {
       nights:      true,
       revenue:     true,
       platform:    true,
+      rating:      true,
       property: { select: { name: true } },
     },
     orderBy: { check_in: 'desc' },
@@ -99,27 +101,26 @@ export default async function CrmPage() {
     nights:       b.nights,
     revenue:      Number(b.revenue),
     platform:     b.platform ?? 'Direct',
+    rating:       b.rating ?? null,
   }));
 
   // ── Compute per-guest all-time stats from bookings ────────────────────────
-  // This replaces the HTML's denormalised Guest.totalStays etc.
   const guestStatsMap: Record<string, {
-    stays: number; nights: number; spend: number; lastVisit: string | null;
+    stays: number; nights: number; spend: number; lastVisit: string | null; ratings: number[];
   }> = {};
 
   rawBookings.forEach((b) => {
     if (!b.guest_id) return;
     if (!guestStatsMap[b.guest_id]) {
-      guestStatsMap[b.guest_id] = { stays: 0, nights: 0, spend: 0, lastVisit: null };
+      guestStatsMap[b.guest_id] = { stays: 0, nights: 0, spend: 0, lastVisit: null, ratings: [] };
     }
     const stats = guestStatsMap[b.guest_id];
     stats.stays++;
     stats.nights += b.nights;
     stats.spend  += Number(b.revenue);
-    const checkIn = b.check_in.toISOString().split('T')[0];
-    // lastVisit = most recent check_out
     const checkOut = b.check_out.toISOString().split('T')[0];
     if (!stats.lastVisit || checkOut > stats.lastVisit) stats.lastVisit = checkOut;
+    if (b.rating && b.rating > 0) stats.ratings.push(b.rating);
   });
 
   // ── Fetch guests ──────────────────────────────────────────────────────────
@@ -137,6 +138,10 @@ export default async function CrmPage() {
 
   const guests: SerializableGuest[] = rawGuests.map((g) => {
     const stats = guestStatsMap[g.id];
+    const ratings = stats?.ratings ?? [];
+    const avgRating = ratings.length > 0
+      ? +(ratings.reduce((s, r) => s + r, 0) / ratings.length).toFixed(1)
+      : null;
     return {
       id:          g.id,
       name:        g.name,
@@ -148,8 +153,7 @@ export default async function CrmPage() {
       allTimeNights: stats?.nights  ?? 0,
       allTimeSpend:  stats?.spend   ?? 0,
       lastVisit:     stats?.lastVisit ?? null,
-      // rating not yet in Booking schema — always null until migration
-      avgRating:   null,
+      avgRating,
     };
   });
 

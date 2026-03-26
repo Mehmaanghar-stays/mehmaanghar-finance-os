@@ -19,6 +19,9 @@
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { matchesPeriod } from '@/lib/period';
 import type { PeriodState } from '@/lib/period';
 import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
@@ -58,12 +61,12 @@ export interface SerializableDailyExp {
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-const fIN = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fI  = (n: number) => {
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 };
 
 // ---------------------------------------------------------------------------
@@ -94,16 +97,15 @@ export function DailyExpClient({
   const [, startTransition] = useTransition();
 
   // ── Local state ───────────────────────────────────────────────────────────
-  const [propFilter, setPropFilter] = useState('all');
-  const [catFilter,  setCatFilter]  = useState('all');
   const [page, setPage]             = useState(1);
   const [modalOpen, setModalOpen]   = useState(false);
   const [editId, setEditId]         = useState<string | null>(null);
   const [editValues, setEditValues] = useState<Partial<DailyExpFormValues>>();
   const [isSaving, setIsSaving]     = useState(false);
 
-  // ── Period store ──────────────────────────────────────────────────────────
+  // ── Period store + per-page filters ───────────────────────────────────────
   const periodState = usePeriod();
+  const filters = usePageFilters({ city: true, property: true, category: true });
 
   // ── Property lookup ───────────────────────────────────────────────────────
   const propMap = useMemo(
@@ -111,21 +113,27 @@ export function DailyExpClient({
     [properties],
   );
 
-  // ── Filter expenses: period + local prop/cat filters ─────────────────────
-  // matchesPeriod uses the date string, matching the HTML's filter chain:
-  //   1. matchesPeriod(e.date)   ← global period filter (PeriodBar)
-  //   2. pid filter              ← local property dropdown
-  //   3. category filter         ← local category dropdown
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
+  const categoryOptions: FilterOption[] = DAILY_EXP_CATS.map((c) => ({ value: c.value, label: c.label }));
+
+  // ── Filter expenses: period + URL filters ─────────────────────────────────
   const filtered = useMemo(() => {
     let exps = expenses.filter((e) =>
       matchesPeriod(e.date, periodState as PeriodState),
     );
-    if (propFilter !== 'all') exps = exps.filter((e) => e.pid === propFilter);
-    if (catFilter  !== 'all') exps = exps.filter((e) => e.category === catFilter);
-    // Sort: newest date first — verbatim b.date.localeCompare(a.date)
+    if (filters.city     !== 'all') exps = exps.filter((e) => propMap[e.pid]?.city === filters.city);
+    if (filters.property !== 'all') exps = exps.filter((e) => e.pid === filters.property);
+    if (filters.category !== 'all') exps = exps.filter((e) => e.category === filters.category);
     return [...exps].sort((a, b) => b.date.localeCompare(a.date));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expenses, propFilter, catFilter,
+  }, [expenses, filters.city, filters.property, filters.category, propMap,
       periodState.cPType, periodState.cM, periodState.cY, periodState.cQ,
       periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
       periodState.cDay, periodState.cWeek]);
@@ -152,11 +160,12 @@ export function DailyExpClient({
   function handleEdit(e: SerializableDailyExp) {
     setEditId(e.id);
     setEditValues({
-      pid:      e.pid,
-      date:     e.date,
-      category: e.category,
-      amount:   String(e.amount),
-      note:     e.note,
+      pid:                 e.pid,
+      date:                e.date,
+      category:            e.category,
+      amount:              String(e.amount),
+      note:                e.note,
+      existingInvoicePath: e.invoicePath,
     });
     setModalOpen(true);
   }
@@ -169,7 +178,10 @@ export function DailyExpClient({
         {
           method:  id ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            invoice_path: payload.invoicePath ?? undefined,
+          }),
         },
       );
       if (!res.ok) {
@@ -184,6 +196,22 @@ export function DailyExpClient({
       toast('Network error — please try again', 'er');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  // ── View invoice — fetch signed URL on click, open in new tab ─────────────
+  async function handleViewInvoice(invoicePath: string) {
+    try {
+      const res = await fetch('/api/files/signed-url', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bucket: 'mg-finance-os', path: invoicePath, expiresIn: 120 }),
+      });
+      if (!res.ok) { toast('Could not load invoice — please try again', 'er'); return; }
+      const { url } = await res.json();
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      toast('Network error loading invoice', 'er');
     }
   }
 
@@ -218,22 +246,18 @@ export function DailyExpClient({
         )}
       </div>
 
-      {/* ── 3 KPI cards — verbatim from dexpKpis innerHTML ───────────────── */}
+      <PageFilterBar
+        filters={filters}
+        config={{ city: true, property: true, category: true }}
+        cities={cityOptions}
+        properties={propOptions}
+        categories={categoryOptions}
+      />
+
+      {/* ── 3 KPI cards ──────────────────────────────────────────────────── */}
       <MetricCardGrid>
-        <MetricCard
-          label="Period Expenses"
-          value={fI(total)}
-          sub="Total this period"
-          iconText="↓"
-          iconVariant="r"
-        />
-        <MetricCard
-          label="Entries"
-          value={String(filtered.length)}
-          sub="Expense records"
-          iconText="#"
-          iconVariant="o"
-        />
+        <MetricCard label="Period Expenses" value={fI(total)} sub="Total this period" iconText="↓" iconVariant="r" />
+        <MetricCard label="Entries" value={String(filtered.length)} sub="Expense records" iconText="#" iconVariant="o" />
         <MetricCard
           label="Top Category"
           value={topCatEntry ? (EXP_CATS_DAILY[topCatEntry[0]] ?? topCatEntry[0]) : '—'}
@@ -246,33 +270,7 @@ export function DailyExpClient({
       {/* ── Table card ───────────────────────────────────────────────────── */}
       <div className="tw">
         <div className="th">
-          <div className="ct" id="dexpTitle">
-            Expense Log
-          </div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {/* Property filter */}
-            <select
-              className="fsel"
-              value={propFilter}
-              onChange={(e) => { setPropFilter(e.target.value); setPage(1); }}
-            >
-              <option value="all">All Properties</option>
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-            {/* Category filter */}
-            <select
-              className="fsel"
-              value={catFilter}
-              onChange={(e) => { setCatFilter(e.target.value); setPage(1); }}
-            >
-              <option value="all">All Categories</option>
-              {DAILY_EXP_CATS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
-          </div>
+          <div className="ct" id="dexpTitle">Expense Log</div>
         </div>
 
         {filtered.length === 0 ? (
@@ -314,14 +312,13 @@ export function DailyExpClient({
                         <td style={{ fontSize: '11px', color: 'var(--t3)' }}>
                           {e.note || ''}
                         </td>
-                        {/* Invoice icon — inert until storage is wired (v3 plan §3.2) */}
+                        {/* Invoice icon — clicks fetch signed URL and open in new tab */}
                         <td>
                           {e.invoicePath ? (
                             <button
                               className="btn btn-g btn-sm"
-                              title="View invoice (storage not yet connected)"
-                              disabled
-                              style={{ cursor: 'default', opacity: 0.7 }}
+                              title="View invoice"
+                              onClick={() => handleViewInvoice(e.invoicePath!)}
                             >
                               🧾
                             </button>

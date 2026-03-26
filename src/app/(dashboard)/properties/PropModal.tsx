@@ -54,22 +54,40 @@ interface PropModalProps {
   editId: string | null;
   /** Pre-filled values when editing */
   initialValues?: Partial<PropertyFormValues>;
-  /** List of known cities for datalist */
-  knownCities: string[];
   onSave: (payload: PropertySavePayload, editId: string | null) => Promise<void>;
   isSaving: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Indian state list — verbatim from HTML select options
+// State → City mapping. Add new states as additional entries here.
 // ---------------------------------------------------------------------------
 
-const STATES = [
-  'Maharashtra', 'Goa', 'Delhi', 'Karnataka', 'Tamil Nadu',
-  'Telangana', 'Rajasthan', 'Gujarat', 'Kerala', 'Uttarakhand',
-  'Himachal Pradesh', 'West Bengal', 'Uttar Pradesh', 'Punjab',
-  'Haryana', 'Madhya Pradesh',
-];
+const STATE_CITIES: Record<string, string[]> = {
+  Maharashtra: [
+    'Mumbai', 'Pune', 'Nashik', 'Nagpur', 'Aurangabad',
+    'Thane', 'Lonavala', 'Mahabaleshwar', 'Kolhapur', 'Satara',
+  ],
+  'Uttar Pradesh': [
+    'Lucknow', 'Agra', 'Varanasi', 'Kanpur', 'Noida',
+    'Ghaziabad', 'Mathura', 'Allahabad', 'Meerut', 'Aligarh',
+  ],
+  Goa: ['Panaji', 'Margao', 'Vasco da Gama', 'Mapusa', 'Ponda'],
+  Delhi: ['New Delhi', 'Dwarka', 'Rohini', 'Lajpat Nagar', 'Connaught Place'],
+  Karnataka: ['Bengaluru', 'Mysuru', 'Hubli', 'Mangaluru', 'Belagavi'],
+  'Tamil Nadu': ['Chennai', 'Coimbatore', 'Madurai', 'Tiruchirappalli', 'Salem'],
+  Telangana: ['Hyderabad', 'Warangal', 'Nizamabad', 'Karimnagar', 'Khammam'],
+  Rajasthan: ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota', 'Bikaner'],
+  Gujarat: ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Bhavnagar'],
+  Kerala: ['Thiruvananthapuram', 'Kochi', 'Kozhikode', 'Thrissur', 'Kollam'],
+  Uttarakhand: ['Dehradun', 'Haridwar', 'Rishikesh', 'Nainital', 'Mussoorie'],
+  'Himachal Pradesh': ['Shimla', 'Manali', 'Dharamshala', 'Kullu', 'Solan'],
+  'West Bengal': ['Kolkata', 'Howrah', 'Durgapur', 'Siliguri', 'Asansol'],
+  Punjab: ['Ludhiana', 'Amritsar', 'Jalandhar', 'Patiala', 'Bathinda'],
+  Haryana: ['Gurugram', 'Faridabad', 'Panipat', 'Ambala', 'Karnal'],
+  'Madhya Pradesh': ['Bhopal', 'Indore', 'Gwalior', 'Jabalpur', 'Ujjain'],
+};
+
+const STATES = Object.keys(STATE_CITIES).sort();
 
 // ---------------------------------------------------------------------------
 // Default blank form
@@ -85,7 +103,7 @@ const BLANK: PropertyFormValues = {
 // ---------------------------------------------------------------------------
 
 export function PropModal({
-  isOpen, onClose, editId, initialValues, knownCities, onSave, isSaving,
+  isOpen, onClose, editId, initialValues, onSave, isSaving,
 }: PropModalProps) {
   const [form, setForm] = useState<PropertyFormValues>(BLANK);
   const [assetCounter, setAssetCounter] = useState(0);
@@ -100,6 +118,14 @@ export function PropModal({
   function set(field: keyof PropertyFormValues, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+
+  // When state changes, clear city so user picks from the new state's list
+  function handleStateChange(newState: string) {
+    setForm((f) => ({ ...f, state: newState, city: '' }));
+  }
+
+  // Cities available for the currently selected state
+  const availableCities = form.state ? (STATE_CITIES[form.state] ?? []) : [];
 
   // ── Asset rows ────────────────────────────────────────────────────────────
 
@@ -154,7 +180,7 @@ export function PropModal({
     .filter((a) => a.name && a.amount > 0)
     .reduce((s, a) => s + a.amount, 0);
 
-  const fIN = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+  const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -176,28 +202,39 @@ export function PropModal({
         />
       </div>
 
-      {/* City + State row */}
+      {/* State + City row — State first, City auto-populates from selected state */}
       <div className={styles.fg}>
         <div className={styles.fl}>
-          <label>City *</label>
-          <input
-            className={styles.fi}
-            value={form.city}
-            onChange={(e) => set('city', e.target.value)}
-            list="propCityList"
-            placeholder="Type or select city"
-            autoComplete="off"
-          />
-          <datalist id="propCityList">
-            {knownCities.map((c) => <option key={c} value={c} />)}
-          </datalist>
+          <label>State *</label>
+          <select
+            className={styles.fs}
+            value={form.state}
+            onChange={(e) => handleStateChange(e.target.value)}
+          >
+            <option value="">Select State</option>
+            {STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
         </div>
         <div className={styles.fl}>
-          <label>State</label>
-          <select className={styles.fs} value={form.state} onChange={(e) => set('state', e.target.value)}>
-            <option value="">Select State</option>
-            {STATES.map((s) => <option key={s}>{s}</option>)}
-          </select>
+          <label>City *</label>
+          {availableCities.length > 0 ? (
+            <select
+              className={styles.fs}
+              value={form.city}
+              onChange={(e) => set('city', e.target.value)}
+            >
+              <option value="">Select City</option>
+              {availableCities.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          ) : (
+            <input
+              className={styles.fi}
+              value={form.city}
+              onChange={(e) => set('city', e.target.value)}
+              placeholder={form.state ? 'Type city name' : 'Select a state first'}
+              disabled={!form.state}
+            />
+          )}
         </div>
       </div>
 

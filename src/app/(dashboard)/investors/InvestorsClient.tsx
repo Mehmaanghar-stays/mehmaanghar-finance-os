@@ -14,6 +14,9 @@ import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD } from '@/lib/period';
 import type { RepRow } from '@/lib/period';
 import { formatROI } from '@/lib/finance';
@@ -36,13 +39,13 @@ const InvCharts = dynamic(
 // ---------------------------------------------------------------------------
 
 function fI(n: number): string {
-  if (!n && n !== 0) return '₹0';
+  if (!n && n !== 0) return '₹0.00';
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
-const fF = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fF = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MN = ['','January','February','March','April','May','June',
             'July','August','September','October','November','December'];
@@ -89,20 +92,42 @@ export function InvestorsClient({
   const [panelOpen, setPanelOpen]   = useState(false);
   const [panelInv, setPanelInv]     = useState<SerializableInvestor | null>(null);
 
-  // ── Period store ──────────────────────────────────────────────────────────
+  // ── Period store + per-page filters ───────────────────────────────────────
   const { getFilteredReps } = usePeriod();
+  const filters = usePageFilters({ city: true, property: true });
   const allReps = reports as RepRow[];
-
-  const filteredReps = useMemo(
-    () => getFilteredReps(allReps, () => null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps],
-  );
 
   // ── Property lookup ───────────────────────────────────────────────────────
   const propMap = useMemo(
     () => Object.fromEntries(properties.map((p) => [p.id, p])),
     [properties],
+  );
+
+  const propById = useMemo(
+    () => (pid: string) => propMap[pid]
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+      : null,
+    [propMap],
+  );
+
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: 'all' }),
+    [filters.city, filters.property],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
+
+  const filteredReps = useMemo(
+    () => getFilteredReps(allReps, propById, pageFilterState),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allReps, propById, pageFilterState],
   );
 
   // ── Per-investor net payout for current period ────────────────────────────
@@ -201,13 +226,16 @@ export function InvestorsClient({
   }, [panelInv, allReps]);
 
   const panelAgg = useMemo(
-    () => (panelAllReps.length ? withD(aggReps(panelAllReps)) : null),
-    [panelAllReps],
+    () => (panelAllReps.length
+      ? withD(aggReps(panelAllReps, (pid) => propMap[pid]?.capital ?? 0))
+      : null),
+    [panelAllReps, propMap],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
       {/* ── Table card ────────────────────────────────────────────────────── */}
       <div className="tw">
         <div className="th">
@@ -437,9 +465,9 @@ function InvReportHistory({
   const [open, setOpen] = useState(false);
   const fI = (n: number) => {
     const v = Math.abs(n);
-    if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-    if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-    return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+    if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+    if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+    return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
   };
 
   return (

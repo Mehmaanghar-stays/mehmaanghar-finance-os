@@ -81,7 +81,7 @@ interface ExpCatRow {
 // ---------------------------------------------------------------------------
 
 function fIN(n: number) {
-  return '₹' + Math.round(n || 0).toLocaleString('en-IN');
+  return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 // ---------------------------------------------------------------------------

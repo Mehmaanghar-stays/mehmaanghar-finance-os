@@ -228,7 +228,7 @@ export function BookingModal({
     }, editId);
   }
 
-  const fIN = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+  const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <Modal
@@ -294,6 +294,11 @@ export function BookingModal({
           <div className={`tab${form.bookingType === 'stay' ? ' active' : ''}`} onClick={() => set('bookingType', 'stay')}>🏠 Stay Booking</div>
           <div className={`tab${form.bookingType === 'event' ? ' active' : ''}`} onClick={() => set('bookingType', 'event')}>🎉 Event Booking</div>
         </div>
+        {form.bookingType === 'event' && (
+          <div style={{ fontSize: '10.5px', color: 'var(--t2)', background: 'var(--s2)', borderRadius: '7px', padding: '6px 10px', marginTop: '6px' }}>
+            Event bookings are not charged per night — nights will be recorded as 0. Use the event date and total amount below.
+          </div>
+        )}
       </div>
 
       {/* ── 3a. Stay fields ───────────────────────────────────────────────── */}

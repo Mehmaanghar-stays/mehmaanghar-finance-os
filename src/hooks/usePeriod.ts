@@ -2,23 +2,24 @@
 //
 // Thin wrapper over the Zustand period store.
 //
-// Exports everything a component needs to read or update period/filter state,
-// plus a convenience helper that calls getFReps() from src/lib/period.ts with
-// the current store state — keeping all filtering logic in period.ts.
+// Exposes ONLY period state (type, month, year, quarter, FY, custom range,
+// day, week) and the helpers that apply it to report rows.
+//
+// Entity filters (city, property, commission, platform, investor) are now
+// per-page URL query params managed by usePageFilters — they are NOT here.
+// This eliminates cross-page filter contamination.
 
 import { usePeriodStore } from '@/store/period';
 import { getFReps } from '@/lib/period';
-import type { PeriodState, FilterState, RepRow, PropLookup } from '@/lib/period';
+import type { PeriodState, RepRow, PropLookup, FilterState } from '@/lib/period';
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 export function usePeriod() {
-  // Read the full store slice. Zustand v5 — selector keeps re-renders granular.
   const store = usePeriodStore();
 
-  // ── Period state (read) ───────────────────────────────────────────────────
   const periodState: PeriodState = {
     cPType:    store.cPType,
     cM:        store.cM,
@@ -31,56 +32,43 @@ export function usePeriod() {
     cWeek:     store.cWeek,
   };
 
-  // ── Filter state (read) ───────────────────────────────────────────────────
-  const filterState: FilterState = {
-    cCi:  store.cCi,
-    cPid: store.cPid,
-    cComm: store.cComm,
-  };
+  const { setPeriod, reset } = store;
 
-  // ── Actions ───────────────────────────────────────────────────────────────
-  const { setPeriod, setFilters, reset } = store;
-
-  // ── Convenience: filter rep rows with current store state ─────────────────
-  /**
-   * Applies the current period and filter state to an array of report rows.
-   *
-   * @param reps     All report rows (from the server or API).
-   * @param propById O(1) property lookup by pid — build from your property list:
-   *                   const propMap = useMemo(() =>
-   *                     Object.fromEntries(props.map(p => [p.id, p])), [props]);
-   *                   const lookup = (pid: string) => propMap[pid] ?? null;
-   */
+  // ── Filter reps with explicit filter state (provided by the caller) ────────
+  // Pages pass their own per-page filter values (from usePageFilters / URL).
   function getFilteredReps(
     reps: RepRow[],
     propById: (pid: string) => PropLookup | null,
+    filters?: Partial<FilterState>,
   ): RepRow[] {
-    return getFReps(reps, propById, periodState, filterState);
+    const f: FilterState = {
+      cCi:   filters?.cCi   ?? 'all',
+      cPid:  filters?.cPid  ?? 'all',
+      cComm: filters?.cComm ?? 'all',
+    };
+    return getFReps(reps, propById, periodState, f);
   }
 
-  // ── Optional: filter with explicit m,y override (for trend loops) ─────────
-  /**
-   * Filter reps for a specific month/year regardless of the current period type.
-   * Useful for chart components that loop over a 6-month rolling window.
-   */
+  // ── Filter reps for a specific month/year (trend loops) ───────────────────
   function getFilteredRepsForMonth(
     reps: RepRow[],
     propById: (pid: string) => PropLookup | null,
     m: number,
     y: number,
+    filters?: Partial<FilterState>,
   ): RepRow[] {
-    return getFReps(reps, propById, periodState, filterState, m, y);
+    const f: FilterState = {
+      cCi:   filters?.cCi   ?? 'all',
+      cPid:  filters?.cPid  ?? 'all',
+      cComm: filters?.cComm ?? 'all',
+    };
+    return getFReps(reps, propById, periodState, f, m, y);
   }
 
   return {
-    // State
     ...periodState,
-    ...filterState,
-    // Actions
     setPeriod,
-    setFilters,
     reset,
-    // Helpers
     getFilteredReps,
     getFilteredRepsForMonth,
   };

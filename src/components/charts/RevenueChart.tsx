@@ -56,19 +56,19 @@ export function RevenueChart({ trend }: RevenueChartProps) {
     datasets: [
       {
         label: 'Revenue',
-        data: trend.map((t) => Math.round(t.rev / 1000)),
+        data: trend.map((t) => t.rev),
         backgroundColor: 'rgba(244,82,30,.85)',
         borderRadius: 5,
       },
       {
         label: 'Expenses',
-        data: trend.map((t) => Math.round(t.exp / 1000)),
+        data: trend.map((t) => t.exp),
         backgroundColor: 'rgba(220,38,38,.75)',
         borderRadius: 5,
       },
       {
         label: 'Op.Profit',
-        data: trend.map((t) => Math.round(t.op / 1000)),
+        data: trend.map((t) => t.op),
         backgroundColor: 'rgba(22,163,74,.8)',
         borderRadius: 5,
       },
@@ -87,7 +87,14 @@ export function RevenueChart({ trend }: RevenueChartProps) {
       x: { grid: { display: false } },
       y: {
         grid: { color: '#F1F0EC' },
-        ticks: { callback: (v: number | string) => '₹' + v + 'K' },
+        ticks: {
+          callback: (v: number | string) => {
+            const n = Number(v);
+            if (n >= 100000) return '₹' + (n / 100000).toFixed(1) + 'L';
+            if (n >= 1000)   return '₹' + (n / 1000).toFixed(0) + 'K';
+            return '₹' + n;
+          },
+        },
       },
     },
   };
