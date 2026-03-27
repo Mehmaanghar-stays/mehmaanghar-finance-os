@@ -1,14 +1,5 @@
 'use client';
 // src/app/(dashboard)/properties/PropertiesClient.tsx
-//
-// Client Component. Renders the full Properties page:
-//   - Table with period-filtered report stats per property
-//   - Pagination (PAGE_SIZE = 20, verbatim from HTML)
-//   - Add/Edit modal (PropModal)
-//   - Delete confirmation
-//   - Slide-in detail panel (DetailPanel from Run 4)
-//
-// HTML source: rndProps(), openPropDetail(), editProp(), delProp(), saveProp()
 
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -26,7 +17,7 @@ import type { PropertySavePayload, PropertyFormValues } from './PropModal';
 import type { SerializableProperty, SerializableReport } from './page';
 
 // ---------------------------------------------------------------------------
-// Constants (verbatim from HTML)
+// Constants
 // ---------------------------------------------------------------------------
 
 const PAGE_SIZE = 20;
@@ -42,8 +33,13 @@ function fI(n: number): string {
   if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
   return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
-const fF = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const MN = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function fF(n: number): string {
+  return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+const MN = ['', 'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -51,10 +47,10 @@ const MN = ['','January','February','March','April','May','June','July','August'
 
 interface PropertiesClientProps {
   properties: SerializableProperty[];
-  reports: SerializableReport[];
-  canCreate: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  reports:    SerializableReport[];
+  canCreate:  boolean;
+  canEdit:    boolean;
+  canDelete:  boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,16 +68,15 @@ export function PropertiesClient({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  // ── Local state ───────────────────────────────────────────────────────────
-  const [page, setPage] = useState(1);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<Partial<PropertyFormValues> | undefined>();
-  const [isSaving, setIsSaving] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [panelProp, setPanelProp] = useState<SerializableProperty | null>(null);
+  const [page,        setPage]        = useState(1);
+  const [modalOpen,   setModalOpen]   = useState(false);
+  const [editId,      setEditId]      = useState<string | null>(null);
+  const [editValues,  setEditValues]  = useState<Partial<PropertyFormValues> | undefined>();
+  const [isSaving,    setIsSaving]    = useState(false);
+  const [panelOpen,   setPanelOpen]   = useState(false);
+  const [panelProp,   setPanelProp]   = useState<SerializableProperty | null>(null);
 
-  // ── Period store + per-page filters ───────────────────────────────────────
+  // ── Period + filters ──────────────────────────────────────────────────────
   const { getFilteredReps, ...periodState } = usePeriod();
   const filters = usePageFilters({ city: true, property: true, comm: true });
 
@@ -89,8 +84,11 @@ export function PropertiesClient({
     () => Object.fromEntries(initialProperties.map((p) => [p.id, p])),
     [initialProperties],
   );
+
   const propById = (pid: string) =>
-    propMap[pid] ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm } : null;
+    propMap[pid]
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].effectiveComm }
+      : null;
 
   const allReps = reports as RepRow[];
 
@@ -99,16 +97,30 @@ export function PropertiesClient({
     [filters.city, filters.property, filters.comm],
   );
 
+  // ── Filter options ────────────────────────────────────────────────────────
+
   const cityOptions: FilterOption[] = useMemo(
-    () => [...new Set(initialProperties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    () => [...new Set(initialProperties.map((p) => p.city).filter(Boolean))].sort()
+      .map((c) => ({ value: c, label: c })),
     [initialProperties],
   );
+
   const propOptions: FilterOption[] = useMemo(
     () => initialProperties.map((p) => ({ value: p.id, label: p.name })),
     [initialProperties],
   );
 
-  // Filtered reps for current period — includes comm filter for Properties
+  // Commission filter options — derived from actual property effectiveComm values
+  // so custom commissions and broker-adjusted commissions always appear
+  const commOptions: FilterOption[] = useMemo(
+    () => [...new Set(initialProperties.map((p) => Math.round(p.effectiveComm)))]
+      .sort((a, b) => a - b)
+      .map((c) => ({ value: String(c), label: `${c}%` })),
+    [initialProperties],
+  );
+
+  // ── Report aggregation ────────────────────────────────────────────────────
+
   const filteredReps = useMemo(
     () => getFilteredReps(allReps, propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,8 +130,6 @@ export function PropertiesClient({
      periodState.cDay, periodState.cWeek],
   );
 
-  // Per-property aggregate lookup: pid → withD result
-  // capital is passed as the second arg so calcROI() returns a real value.
   const propAggMap = useMemo(() => {
     const m: Record<string, ReturnType<typeof withD>> = {};
     initialProperties.forEach((p) => {
@@ -131,7 +141,6 @@ export function PropertiesClient({
     return m;
   }, [filteredReps, initialProperties, propMap]);
 
-  // All-time report count per property
   const totalRepCount = useMemo(() => {
     const m: Record<string, number> = {};
     allReps.forEach((r) => { m[r.pid] = (m[r.pid] ?? 0) + 1; });
@@ -139,42 +148,51 @@ export function PropertiesClient({
   }, [allReps]);
 
   // ── Pagination ────────────────────────────────────────────────────────────
-  const totalPages = Math.max(1, Math.ceil(initialProperties.length / PAGE_SIZE));
-  const safePageNum = Math.min(page, totalPages);
-  const paginated = initialProperties.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
 
-  // ── Open add modal ────────────────────────────────────────────────────────
+  const totalPages  = Math.max(1, Math.ceil(initialProperties.length / PAGE_SIZE));
+  const safePageNum = Math.min(page, totalPages);
+  const paginated   = initialProperties.slice((safePageNum - 1) * PAGE_SIZE, safePageNum * PAGE_SIZE);
+
+  // Apply property filter to the visible rows — when a specific property is
+  // selected, only that row is shown in the table.
+  const visibleProperties = filters.property === 'all'
+    ? paginated
+    : paginated.filter((p) => p.id === filters.property);
+
+  // ── Modal handlers ────────────────────────────────────────────────────────
+
   function handleAdd() {
     setEditId(null);
     setEditValues(undefined);
     setModalOpen(true);
   }
 
-  // ── Open edit modal ───────────────────────────────────────────────────────
   function handleEdit(p: SerializableProperty) {
     const stdComms = ['20', '25', '30'];
-    const commStr = String(Math.round(p.comm));
+    const commStr  = String(Math.round(p.comm));
     setEditId(p.id);
     setEditValues({
-      name: p.name,
-      city: p.city,
-      state: p.state,
-      comm: stdComms.includes(commStr) ? commStr : 'custom',
-      commCustom: stdComms.includes(commStr) ? '' : commStr,
-      address: p.address ?? '',
-      capital: p.capital ? String(p.capital) : '',
-      assets: (p.assets ?? []).map((a, i) => ({ ...a, id: i + 1, type: a.type as 'refundable' | 'recoverable' })),
+      name:          p.name,
+      city:          p.city,
+      state:         p.state,
+      comm:          stdComms.includes(commStr) ? commStr : 'custom',
+      commCustom:    stdComms.includes(commStr) ? '' : commStr,
+      address:       p.address ?? '',
+      capital:       p.capital ? String(p.capital) : '',
+      assets:        (p.assets ?? []).map((a, i) => ({ ...a, id: i + 1, type: a.type as 'refundable' | 'recoverable' })),
+      broker_name:   p.broker_name,
+      broker_pct:    String(p.broker_pct),
+      broker_public: p.broker_public,
     });
     setModalOpen(true);
   }
 
-  // ── Save (create or update) ───────────────────────────────────────────────
   async function handleSave(payload: PropertySavePayload, id: string | null) {
     setIsSaving(true);
     try {
       const method = id ? 'PATCH' : 'POST';
-      const url = id ? `/api/properties/${id}` : '/api/properties';
-      const res = await fetch(url, {
+      const url    = id ? `/api/properties/${id}` : '/api/properties';
+      const res    = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -194,7 +212,6 @@ export function PropertiesClient({
     }
   }
 
-  // ── Delete ────────────────────────────────────────────────────────────────
   async function handleDelete(p: SerializableProperty) {
     if (!window.confirm(
       `Delete "${p.name}" and ALL linked data (reports, bookings, expenses, payouts, utilities)?`,
@@ -215,18 +232,17 @@ export function PropertiesClient({
   }
 
   // ── Detail panel ──────────────────────────────────────────────────────────
+
   function openDetail(p: SerializableProperty) {
     setPanelProp(p);
     setPanelOpen(true);
   }
 
-  // Latest report for the panel property
   const panelLatestRep = useMemo(() => {
     if (!panelProp) return null;
-    const pReps = allReps
+    return allReps
       .filter((r) => r.pid === panelProp.id)
-      .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
-    return pReps[0] ?? null;
+      .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month))[0] ?? null;
   }, [panelProp, allReps]);
 
   const panelAllReps = useMemo(() => {
@@ -235,6 +251,9 @@ export function PropertiesClient({
       .filter((r) => r.pid === panelProp.id)
       .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
   }, [panelProp, allReps]);
+
+  // Suppress unused variable warning
+  void isPending;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -245,12 +264,21 @@ export function PropertiesClient({
         config={{ city: true, property: true, comm: true }}
         cities={cityOptions}
         properties={propOptions}
+        commOptions={commOptions}
       />
+
       <div className="tw">
         {/* Header */}
         <div className="th">
           <div>
-            <div className="ct">{initialProperties.length} Properties</div>
+            <div className="ct">
+              {visibleProperties.length} {visibleProperties.length === 1 ? 'Property' : 'Properties'}
+              {filters.property !== 'all' && initialProperties.length > 1 && (
+                <span style={{ fontSize: '11px', color: 'var(--t3)', fontWeight: 400, marginLeft: '6px' }}>
+                  (of {initialProperties.length})
+                </span>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
             {canCreate && (
@@ -267,13 +295,10 @@ export function PropertiesClient({
             <div className="es-ico">🏠</div>
             <div className="es-t">No Properties</div>
             <div className="es-s">Add your first property.</div>
-            {canCreate && (
-              <button className="btn btn-or" onClick={handleAdd}>Add Property</button>
-            )}
+            {canCreate && <button className="btn btn-or" onClick={handleAdd}>Add Property</button>}
           </div>
         ) : (
           <>
-            {/* Table — columns verbatim from HTML thead */}
             <div style={{ overflowX: 'auto' }}>
               <table>
                 <thead>
@@ -291,12 +316,14 @@ export function PropertiesClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {paginated.map((p) => {
-                    const lR = propAggMap[p.id];
+                  {visibleProperties.map((p) => {
+                    const lR        = propAggMap[p.id];
                     const totalRpts = totalRepCount[p.id] ?? 0;
+                    const hasBroker = p.broker_public && p.broker_name && p.broker_pct > 0;
+
                     return (
                       <tr key={p.id}>
-                        {/* Property name + city/state sub */}
+                        {/* Property name */}
                         <td>
                           <div
                             style={{ fontSize: '13px', fontWeight: 700, color: 'var(--or)', cursor: 'pointer' }}
@@ -308,25 +335,47 @@ export function PropertiesClient({
                             {p.city}{p.state ? `, ${p.state}` : ''}
                           </div>
                         </td>
+
+                        {/* City */}
                         <td>{p.city || '—'}</td>
-                        <td><span className="pill o">{p.comm}%</span></td>
+
+                        {/* Comm% — shows effectiveComm when broker is public */}
+                        <td>
+                          <span className="pill o">{p.effectiveComm}%</span>
+                          {hasBroker && (
+                            <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '2px' }}>
+                              +{p.broker_pct}% {p.broker_name}
+                            </div>
+                          )}
+                        </td>
+
                         {/* Revenue */}
                         <td>
                           {lR ? fI(lR.rev) : <span style={{ color: 'var(--t3)' }}>—</span>}
                         </td>
+
                         {/* Investor Net */}
                         <td>
                           {lR
                             ? <span style={{ color: 'var(--gr)', fontWeight: 700 }}>{fI(lR.invProfit)}</span>
                             : <span style={{ color: 'var(--t3)' }}>—</span>}
                         </td>
-                        {/* MHG Commission */}
+
+                        {/* MHG Commission — label changes when broker is public */}
                         <td>
-                          {lR
-                            ? <span style={{ color: 'var(--or)', fontWeight: 700 }}>{fI(lR.commission)}</span>
-                            : <span style={{ color: 'var(--t3)' }}>—</span>}
+                          {lR ? (
+                            <div>
+                              <span style={{ color: 'var(--or)', fontWeight: 700 }}>{fI(lR.commission)}</span>
+                              {hasBroker && (
+                                <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '2px' }}>
+                                  incl. broker
+                                </div>
+                              )}
+                            </div>
+                          ) : <span style={{ color: 'var(--t3)' }}>—</span>}
                         </td>
-                        {/* Occupancy with progress bar */}
+
+                        {/* Occupancy */}
                         <td>
                           {lR ? (
                             <div style={{ fontWeight: 600 }}>
@@ -340,37 +389,32 @@ export function PropertiesClient({
                             </div>
                           ) : '—'}
                         </td>
-                        {/* ROI */}
+
+                        {/* ROI — always use roiDisplay from withD() */}
                         <td>
                           {lR ? (
-                            <span style={{ fontWeight: 800, color: lR.roi !== null && (lR.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)' }}>
-                              {lR.roiDisplay ?? (lR.roi !== null ? lR.roi.toFixed(2) + '%' : 'N/A')}
+                            <span style={{
+                              fontWeight: 800,
+                              color: !lR._hasCapital
+                                ? 'var(--t3)'
+                                : (lR.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)',
+                            }}>
+                              {lR.roiDisplay}
                             </span>
                           ) : '—'}
                         </td>
-                        {/* Report count */}
+
+                        {/* Reports */}
                         <td><span className="pill b">{totalRpts} rpts</span></td>
+
                         {/* Actions */}
                         {(canEdit || canDelete) && (
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {canEdit && (
-                              <button
-                                className="btn btn-g btn-sm"
-                                title="Edit Property"
-                                onClick={() => handleEdit(p)}
-                              >
-                                ✏️
-                              </button>
+                              <button className="btn btn-g btn-sm" title="Edit Property" onClick={() => handleEdit(p)}>✏️</button>
                             )}
                             {canDelete && (
-                              <button
-                                className="btn btn-rd btn-sm"
-                                title="Delete Property"
-                                onClick={() => handleDelete(p)}
-                                style={{ marginLeft: '4px' }}
-                              >
-                                🗑
-                              </button>
+                              <button className="btn btn-rd btn-sm" title="Delete Property" onClick={() => handleDelete(p)} style={{ marginLeft: '4px' }}>🗑</button>
                             )}
                           </td>
                         )}
@@ -381,8 +425,8 @@ export function PropertiesClient({
               </table>
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
+            {/* Pagination — only when property filter is 'all' */}
+            {filters.property === 'all' && totalPages > 1 && (
               <Pagination
                 total={initialProperties.length}
                 page={safePageNum}
@@ -394,7 +438,7 @@ export function PropertiesClient({
         )}
       </div>
 
-      {/* ── Add/Edit modal ─────────────────────────────────────────────────── */}
+      {/* Add/Edit modal */}
       <PropModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
@@ -404,13 +448,13 @@ export function PropertiesClient({
         isSaving={isSaving}
       />
 
-      {/* ── Detail panel ──────────────────────────────────────────────────── */}
+      {/* Detail panel */}
       <DetailPanel
         isOpen={panelOpen}
         onClose={() => setPanelOpen(false)}
         title={panelProp?.name ?? ''}
         sub={panelProp
-          ? `${panelProp.city}${panelProp.state ? ', ' + panelProp.state : ''} · Commission: ${panelProp.comm}%`
+          ? `${panelProp.city}${panelProp.state ? ', ' + panelProp.state : ''} · Commission: ${panelProp.effectiveComm}%`
           : ''}
       >
         {panelProp && (
@@ -420,15 +464,29 @@ export function PropertiesClient({
                 {MN[panelLatestRep.month]} {panelLatestRep.year} — Latest Data
               </div>
 
-              {/* KPI grid — verbatim from openPropDetail() */}
+              {/* KPI grid */}
               <div className="dp-kpi">
                 <div className="dp-k"><div className="dp-kl">Revenue</div><div className="dp-kv">{fI(panelLatestRep.rev)}</div></div>
                 <div className="dp-k"><div className="dp-kl">Expenses</div><div className="dp-kv" style={{ color: 'var(--rd)' }}>{fI(panelLatestRep.exp)}</div></div>
                 <div className="dp-k"><div className="dp-kl">Op. Profit</div><div className="dp-kv" style={{ color: 'var(--gr)' }}>{fI(panelLatestRep.opProfit)}</div></div>
-                <div className="dp-k"><div className="dp-kl">Commission ({panelProp.comm}%)</div><div className="dp-kv" style={{ color: 'var(--or)' }}>{fI(panelLatestRep.commission)}</div><div className="dp-ks">of op. profit</div></div>
+                <div className="dp-k">
+                  <div className="dp-kl">Commission ({panelProp.effectiveComm}%)</div>
+                  <div className="dp-kv" style={{ color: 'var(--or)' }}>{fI(panelLatestRep.commission)}</div>
+                  <div className="dp-ks">{panelProp.broker_public && panelProp.broker_name ? 'MHG + broker' : 'of op. profit'}</div>
+                </div>
                 <div className="dp-k"><div className="dp-kl">Investor Net</div><div className="dp-kv" style={{ color: 'var(--bl)' }}>{fI(panelLatestRep.invProfit)}</div></div>
-                <div className="dp-k"><div className="dp-kl">Occupancy</div><div className="dp-kv" style={{ color: (panelLatestRep.occ ?? 0) >= 75 ? 'var(--gr)' : 'var(--go)' }}>{panelLatestRep.occ ?? 0}%</div></div>
-                <div className="dp-k"><div className="dp-kl">ROI</div><div className="dp-kv" style={{ color: panelLatestRep.roi !== null ? ((panelLatestRep.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)') : 'var(--t3)' }}>{panelLatestRep.roi !== null ? (panelLatestRep.roi ?? 0).toFixed(2) + '%' : 'N/A'}</div></div>
+                <div className="dp-k">
+                  <div className="dp-kl">Occupancy</div>
+                  <div className="dp-kv" style={{ color: (panelLatestRep.occ ?? 0) >= 75 ? 'var(--gr)' : 'var(--go)' }}>
+                    {panelLatestRep.occ ?? 0}%
+                  </div>
+                </div>
+                <div className="dp-k">
+                  <div className="dp-kl">ROI</div>
+                  <div className="dp-kv" style={{ color: panelLatestRep.roi > 0 ? ((panelLatestRep.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)') : 'var(--t3)' }}>
+                    {panelProp.capital > 0 ? (panelLatestRep.roi ?? 0).toFixed(2) + '%' : 'N/A'}
+                  </div>
+                </div>
                 <div className="dp-k"><div className="dp-kl">ADR</div><div className="dp-kv">{fI(panelLatestRep.adr ?? 0)}</div></div>
                 <div className="dp-k"><div className="dp-kl">RevPAR</div><div className="dp-kv">{fI(panelLatestRep.revpar ?? 0)}</div></div>
               </div>
@@ -440,7 +498,19 @@ export function PropertiesClient({
                   Revenue: <strong>{fF(panelLatestRep.rev)}</strong><br />
                   − Expenses: <strong>{fF(panelLatestRep.exp)}</strong><br />
                   = Operating Profit: <strong style={{ color: 'var(--gr)' }}>{fF(panelLatestRep.opProfit)}</strong><br />
-                  − Commission ({panelProp.comm}% × op.profit): <strong style={{ color: 'var(--or)' }}>{fF(panelLatestRep.commission)}</strong><br />
+                  {/* When broker is public, show split breakdown */}
+                  {panelProp.broker_public && panelProp.broker_name && panelProp.broker_pct > 0 ? (
+                    <>
+                      − MHG ({panelProp.comm}%): <strong style={{ color: 'var(--or)' }}>
+                        {fF(Math.round(Math.max(0, panelLatestRep.opProfit) * panelProp.comm / 100))}
+                      </strong><br />
+                      − {panelProp.broker_name} ({panelProp.broker_pct}%): <strong style={{ color: 'var(--or)' }}>
+                        {fF(Math.round(Math.max(0, panelLatestRep.opProfit) * panelProp.broker_pct / 100))}
+                      </strong><br />
+                    </>
+                  ) : (
+                    <>− Commission ({panelProp.comm}% × op.profit): <strong style={{ color: 'var(--or)' }}>{fF(panelLatestRep.commission)}</strong><br /></>
+                  )}
                   = <strong>Investor Net: <span style={{ color: 'var(--bl)' }}>{fF(panelLatestRep.invProfit)}</span></strong>
                 </div>
               </div>
@@ -464,16 +534,13 @@ export function PropertiesClient({
                 );
               })()}
 
-              {/* Report history (collapsible) */}
-              {panelAllReps.length > 1 && (
-                <ReportHistory reps={panelAllReps} />
-              )}
+              {panelAllReps.length > 1 && <ReportHistory reps={panelAllReps} capital={panelProp.capital} />}
             </>
           ) : (
             <div className="es" style={{ margin: '0 0 16px' }}>
               <div className="es-ico">📊</div>
               <div className="es-t">No Data</div>
-              <div className="es-s">No data for this property yet.</div>
+              <div className="es-s">No reports for this property yet.</div>
             </div>
           )
         )}
@@ -483,12 +550,12 @@ export function PropertiesClient({
 }
 
 // ---------------------------------------------------------------------------
-// ReportHistory — collapsible table of all-time reports for a property
+// ReportHistory — collapsible, with correct N/A ROI display
 // ---------------------------------------------------------------------------
 
-function ReportHistory({ reps }: { reps: SerializableReport[] }) {
+function ReportHistory({ reps, capital }: { reps: SerializableReport[]; capital: number }) {
   const [open, setOpen] = useState(false);
-  const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const MS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const fI = (n: number) => {
     const v = Math.abs(n);
     if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
@@ -523,8 +590,9 @@ function ReportHistory({ reps }: { reps: SerializableReport[] }) {
                   <td style={{ color: 'var(--or)' }}>{fI(r.commission)}</td>
                   <td style={{ color: 'var(--bl)' }}>{fI(r.invProfit)}</td>
                   <td>{r.occ ?? 0}%</td>
-                  <td style={{ color: (r.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)' }}>
-                    {r.roi ?? 0}%
+                  {/* Use capital to decide N/A vs value — fixes 0% display bug */}
+                  <td style={{ color: capital > 0 ? ((r.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)') : 'var(--t3)' }}>
+                    {capital > 0 ? (r.roi ?? 0) + '%' : 'N/A'}
                   </td>
                 </tr>
               ))}
