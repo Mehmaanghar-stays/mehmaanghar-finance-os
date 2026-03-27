@@ -16,7 +16,7 @@
 // Table limit: HTML shows 50 rows max then "Showing X of Y". We use
 // Pagination component for a cleaner UX with the same PAGE_SIZE=50.
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
@@ -30,7 +30,16 @@ import { useToast } from '@/components/ui/Toast';
 import { DailyExpModal } from './DailyExpModal';
 import type { DailyExpFormValues, DailyExpSavePayload } from './DailyExpModal';
 import { DAILY_EXP_CATS } from './DailyExpModal';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — daily expenses only needs id, name, city
+// ---------------------------------------------------------------------------
+
+export interface DailyExpProperty {
+  id:   string;
+  name: string;
+  city: string;
+}
 
 // ---------------------------------------------------------------------------
 // Constants — verbatim from HTML (_dePage = 50)
@@ -75,7 +84,7 @@ const fI  = (n: number) => {
 
 interface DailyExpClientProps {
   expenses: SerializableDailyExp[];
-  properties: SerializableProperty[];
+  properties: DailyExpProperty[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -139,6 +148,8 @@ export function DailyExpClient({
       periodState.cDay, periodState.cWeek]);
 
   // ── KPI derivation ────────────────────────────────────────────────────────
+  useEffect(() => { setPage(1); }, [filtered.length]);
+
   const total    = filtered.reduce((s, e) => s + e.amount, 0);
   const catTotals: Record<string, number> = {};
   filtered.forEach((e) => { catTotals[e.category] = (catTotals[e.category] ?? 0) + e.amount; });
