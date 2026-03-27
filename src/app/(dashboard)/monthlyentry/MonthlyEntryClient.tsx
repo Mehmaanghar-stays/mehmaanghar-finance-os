@@ -29,6 +29,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { usePeriod } from '@/hooks/usePeriod';
+import styles from '@/components/ui/ui.module.css';
 import type { SerializableProperty } from '../properties/page';
 
 // ---------------------------------------------------------------------------
@@ -267,31 +268,35 @@ export function MonthlyEntryClient({
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
               Property *
             </label>
-            <select
-              className="fs"
-              value={pid}
-              onChange={(e) => setPid(e.target.value)}
-            >
-              {properties.length === 0
-                ? <option value="">No properties — add one first</option>
-                : properties.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-            </select>
+            <div className={styles.sw}>
+              <select
+                className={styles.fs}
+                value={pid}
+                onChange={(e) => setPid(e.target.value)}
+              >
+                {properties.length === 0
+                  ? <option value="">No properties — add one first</option>
+                  : properties.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+              </select>
+            </div>
           </div>
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
               Month *
             </label>
-            <select
-              className="fs"
-              value={month}
-              onChange={(e) => setMonth(+e.target.value)}
-            >
-              {MS_OPTS.map((m) => (
-                <option key={m.v} value={m.v}>{m.l}</option>
-              ))}
-            </select>
+            <div className={styles.sw}>
+              <select
+                className={styles.fs}
+                value={month}
+                onChange={(e) => setMonth(+e.target.value)}
+              >
+                {MS_OPTS.map((m) => (
+                  <option key={m.v} value={m.v}>{m.l}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -300,13 +305,15 @@ export function MonthlyEntryClient({
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
               Year *
             </label>
-            <select
-              className="fs"
-              value={year}
-              onChange={(e) => setYear(+e.target.value)}
-            >
-              {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
+            <div className={styles.sw}>
+              <select
+                className={styles.fs}
+                value={year}
+                onChange={(e) => setYear(+e.target.value)}
+              >
+                {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t3)', marginBottom: '5px' }}>
@@ -342,16 +349,18 @@ export function MonthlyEntryClient({
 
         {channels.map((ch) => (
           <div key={ch.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr .8fr 1fr auto', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
-            <select
-              className="fs"
-              style={{ fontSize: '11px', padding: '5px 7px' }}
-              value={ch.name}
-              onChange={(e) => updateChannel(ch.id, 'name', e.target.value)}
-            >
-              {CHANNEL_OPTS.map((o) => <option key={o}>{o}</option>)}
-            </select>
+            <div className={styles.sw} style={{ fontSize: '11px' }}>
+              <select
+                className={styles.fs}
+                style={{ fontSize: '11px', padding: '5px 24px 5px 7px' }}
+                value={ch.name}
+                onChange={(e) => updateChannel(ch.id, 'name', e.target.value)}
+              >
+                {CHANNEL_OPTS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
             <input
-              className="fi"
+              className={styles.fi}
               type="number"
               placeholder="0"
               value={ch.nights}
@@ -359,7 +368,7 @@ export function MonthlyEntryClient({
               style={{ fontSize: '11px', padding: '5px 7px' }}
             />
             <input
-              className="fi"
+              className={styles.fi}
               type="number"
               placeholder="0"
               value={ch.revenue}
@@ -409,14 +418,14 @@ export function MonthlyEntryClient({
         {expCats.map((ec) => (
           <div key={ec.id} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr auto', gap: '4px', marginBottom: '4px', alignItems: 'center' }}>
             <input
-              className="fi"
+              className={styles.fi}
               placeholder="e.g. Rent, Cleaning"
               value={ec.category}
               onChange={(e) => updateExpCat(ec.id, 'category', e.target.value)}
               style={{ fontSize: '11px', padding: '5px 7px' }}
             />
             <input
-              className="fi"
+              className={styles.fi}
               type="number"
               placeholder="0"
               value={ec.amount}

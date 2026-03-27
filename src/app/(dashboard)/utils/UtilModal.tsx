@@ -91,17 +91,21 @@ export function UtilModal({
       <div className={styles.fg}>
         <div className={styles.fl}>
           <label>Type *</label>
-          <select className={styles.fs} value={form.type} onChange={(e) => set('type', e.target.value as UtilType)}>
-            <option value="rent">Rent</option>
-            <option value="electricity">Electricity</option>
-            <option value="custom">Custom</option>
-          </select>
+          <div className={styles.sw}>
+            <select className={styles.fs} value={form.type} onChange={(e) => set('type', e.target.value as UtilType)}>
+              <option value="rent">Rent</option>
+              <option value="electricity">Electricity</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
         </div>
         <div className={styles.fl}>
           <label>Property *</label>
-          <select className={styles.fs} value={form.pid} onChange={(e) => set('pid', e.target.value)}>
-            {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          <div className={styles.sw}>
+            <select className={styles.fs} value={form.pid} onChange={(e) => set('pid', e.target.value)}>
+              {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -147,10 +151,12 @@ export function UtilModal({
         </div>
         <div className={styles.fl}>
           <label>Status</label>
-          <select className={styles.fs} value={form.status} onChange={(e) => set('status', e.target.value as 'pending' | 'paid')}>
-            <option value="pending">Pending</option>
-            <option value="paid">Paid</option>
-          </select>
+          <div className={styles.sw}>
+            <select className={styles.fs} value={form.status} onChange={(e) => set('status', e.target.value as 'pending' | 'paid')}>
+              <option value="pending">Pending</option>
+              <option value="paid">Paid</option>
+            </select>
+          </div>
         </div>
       </div>
 

@@ -30,16 +30,21 @@
 }
 
 .fsel {
-  background: var(--s2);
+  background-color: var(--s2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
   border: 1px solid var(--bdr);
   border-radius: 7px;
-  padding: 6px 10px;
+  padding: 6px 28px 6px 10px;
   font-size: 12.5px;
   color: var(--tx);
   font-family: 'Sora', sans-serif;
   cursor: pointer;
   outline: none;
   transition: border-color .14s;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .fsel:focus {

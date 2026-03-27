@@ -1,7 +1,7 @@
 'use client';
 // src/app/(dashboard)/properties/PropertiesClient.tsx
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useCallback, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
@@ -9,6 +9,7 @@ import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD } from '@/lib/period';
 import type { RepRow } from '@/lib/period';
+import { calcCommission } from '@/lib/finance';
 import { Pagination } from '@/components/ui/Pagination';
 import { DetailPanel } from '@/components/ui/DetailPanel';
 import { useToast } from '@/components/ui/Toast';
@@ -66,7 +67,7 @@ export function PropertiesClient({
 }: PropertiesClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const [page,        setPage]        = useState(1);
   const [modalOpen,   setModalOpen]   = useState(false);
@@ -85,10 +86,12 @@ export function PropertiesClient({
     [initialProperties],
   );
 
-  const propById = (pid: string) =>
-    propMap[pid]
+  const propById = useCallback(
+    (pid: string) => propMap[pid]
       ? { id: pid, city: propMap[pid].city, comm: propMap[pid].effectiveComm }
-      : null;
+      : null,
+    [propMap],
+  );
 
   const allReps = reports as RepRow[];
 
@@ -124,11 +127,14 @@ export function PropertiesClient({
   const filteredReps = useMemo(
     () => getFilteredReps(allReps, propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, JSON.stringify(propMap), pageFilterState,
+    [allReps, propById, pageFilterState,
      periodState.cPType, periodState.cM, periodState.cY,
      periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
      periodState.cDay, periodState.cWeek],
   );
+
+  // Reset to page 1 whenever filtered results change
+  useEffect(() => { setPage(1); }, [filteredReps]);
 
   const propAggMap = useMemo(() => {
     const m: Record<string, ReturnType<typeof withD>> = {};
@@ -214,7 +220,7 @@ export function PropertiesClient({
 
   async function handleDelete(p: SerializableProperty) {
     if (!window.confirm(
-      `Delete "${p.name}" and ALL linked data (reports, bookings, expenses, payouts, utilities)?`,
+      `Delete "${p.name}"?\n\nThis will fail if the property has linked bookings, expenses, investors, or payouts. Remove those first.`,
     )) return;
     try {
       const res = await fetch(`/api/properties/${p.id}`, { method: 'DELETE' });
@@ -251,9 +257,6 @@ export function PropertiesClient({
       .filter((r) => r.pid === panelProp.id)
       .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
   }, [panelProp, allReps]);
-
-  // Suppress unused variable warning
-  void isPending;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -483,7 +486,11 @@ export function PropertiesClient({
                 </div>
                 <div className="dp-k">
                   <div className="dp-kl">ROI</div>
-                  <div className="dp-kv" style={{ color: panelLatestRep.roi > 0 ? ((panelLatestRep.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)') : 'var(--t3)' }}>
+                  <div className="dp-kv" style={{
+                    color: !panelProp.capital
+                      ? 'var(--t3)'
+                      : (panelLatestRep.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)',
+                  }}>
                     {panelProp.capital > 0 ? (panelLatestRep.roi ?? 0).toFixed(2) + '%' : 'N/A'}
                   </div>
                 </div>
@@ -502,10 +509,10 @@ export function PropertiesClient({
                   {panelProp.broker_public && panelProp.broker_name && panelProp.broker_pct > 0 ? (
                     <>
                       − MHG ({panelProp.comm}%): <strong style={{ color: 'var(--or)' }}>
-                        {fF(Math.round(Math.max(0, panelLatestRep.opProfit) * panelProp.comm / 100))}
+                        {fF(calcCommission(panelLatestRep.opProfit, panelProp.comm))}
                       </strong><br />
                       − {panelProp.broker_name} ({panelProp.broker_pct}%): <strong style={{ color: 'var(--or)' }}>
-                        {fF(Math.round(Math.max(0, panelLatestRep.opProfit) * panelProp.broker_pct / 100))}
+                        {fF(calcCommission(panelLatestRep.opProfit, panelProp.broker_pct))}
                       </strong><br />
                     </>
                   ) : (

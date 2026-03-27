@@ -253,19 +253,21 @@ export function DailyExpModal({
       <div className={styles.fg}>
         <div className={styles.fl}>
           <label>Property *</label>
-          <select
-            className={styles.fs}
-            value={form.pid}
-            onChange={(e) => set('pid', e.target.value)}
-          >
-            {properties.length === 0 ? (
-              <option value="">No properties</option>
-            ) : (
-              properties.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))
-            )}
-          </select>
+          <div className={styles.sw}>
+            <select
+              className={styles.fs}
+              value={form.pid}
+              onChange={(e) => set('pid', e.target.value)}
+            >
+              {properties.length === 0 ? (
+                <option value="">No properties</option>
+              ) : (
+                properties.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))
+              )}
+            </select>
+          </div>
         </div>
         <div className={styles.fl}>
           <label>Date *</label>
@@ -287,15 +289,17 @@ export function DailyExpModal({
       <div className={styles.fg}>
         <div className={styles.fl}>
           <label>Category *</label>
-          <select
-            className={styles.fs}
-            value={form.category}
-            onChange={(e) => set('category', e.target.value)}
-          >
-            {DAILY_EXP_CATS.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+          <div className={styles.sw}>
+            <select
+              className={styles.fs}
+              value={form.category}
+              onChange={(e) => set('category', e.target.value)}
+            >
+              {DAILY_EXP_CATS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className={styles.fl}>
           <label>Amount (₹) *</label>

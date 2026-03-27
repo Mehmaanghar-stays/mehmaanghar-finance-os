@@ -7,7 +7,7 @@
 //
 // HTML source: rndBookings(), saveBooking(), editBooking(), delBooking()
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
@@ -142,14 +142,15 @@ export interface SerializableBooking {
   propertyName: string;
   guestId: string | null;
   guestName: string;
-  checkIn: string;   // YYYY-MM-DD
-  checkOut: string;  // YYYY-MM-DD
+  checkIn: string;        // YYYY-MM-DD
+  checkOut: string;       // YYYY-MM-DD
   nights: number;
-  revenue: number;
+  revenue: number;        // total incl. add-on services
+  roomAmount: number;     // booking-only amount (for ADR/RevPAR and edit pre-fill)
   platform: string;
   status: string;
   notes: string | null;
-  bookingType: string;  // 'stay' | 'event' — defaults 'stay' until schema migrated
+  bookingType: 'stay' | 'event';
 }
 
 // ---------------------------------------------------------------------------
@@ -218,8 +219,7 @@ export function BookingsClient({
     let bks = bookings.filter((b) =>
       bookingMatchesPeriod(b.checkIn, b.checkOut, periodState as PeriodState)
     );
-    // City filter — match against property city
-    if (filters.city !== 'all') bks = bks.filter((b) => propMap[b.pid]?.city === filters.city);
+    if (filters.city     !== 'all') bks = bks.filter((b) => propMap[b.pid]?.city === filters.city);
     if (filters.property !== 'all') bks = bks.filter((b) => b.pid === filters.property);
     if (filters.platform !== 'all') bks = bks.filter((b) => b.platform === filters.platform);
     return [...bks].sort((a, b) => b.checkIn.localeCompare(a.checkIn));
@@ -229,11 +229,19 @@ export function BookingsClient({
       periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
       periodState.cDay, periodState.cWeek]);
 
-  // ── KPI derivations — verbatim from HTML ─────────────────────────────────
-  const totalRev     = filtered.reduce((s, b) => s + b.revenue, 0);
-  const totalNights  = filtered.reduce((s, b) => s + b.nights, 0);
-  const uniqueGuests = new Set(filtered.map((b) => b.guestId ?? b.guestName)).size;
-  const avgPerNight  = totalNights > 0 ? +(totalRev / totalNights).toFixed(2) : 0;
+  // Reset to page 1 whenever filtered results change (period or filter change)
+  const prevFilteredLen = useMemo(() => filtered.length, [filtered]);
+  useEffect(() => { setPage(1); }, [prevFilteredLen]);
+
+  // ── KPI derivations ───────────────────────────────────────────────────────
+  const stayBookings  = filtered.filter((b) => b.bookingType !== 'event');
+  const totalRev      = filtered.reduce((s, b) => s + b.revenue, 0);
+  const totalNights   = filtered.reduce((s, b) => s + b.nights, 0);
+  const stayRev       = stayBookings.reduce((s, b) => s + b.revenue, 0);
+  const stayNights    = stayBookings.reduce((s, b) => s + b.nights, 0);
+  const uniqueGuests  = new Set(filtered.map((b) => b.guestId ?? b.guestName)).size;
+  const avgPerNight   = stayNights > 0 ? +(stayRev / stayNights).toFixed(2) : 0;
+  const eventCount    = filtered.filter((b) => b.bookingType === 'event').length;
 
   // ── Pagination ────────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -251,15 +259,15 @@ export function BookingsClient({
   function handleEdit(b: SerializableBooking) {
     setEditId(b.id);
     setEditValues({
-      pid:        b.pid,
-      source:     b.platform,
-      guestName:  b.guestName,
-      checkIn:    b.checkIn,
-      checkOut:   b.checkOut,
-      nights:     b.nights,
-      roomAmount: String(b.revenue),
-      notes:      b.notes ?? '',
-      bookingType: (b.bookingType as 'stay' | 'event') || 'stay',
+      pid:           b.pid,
+      source:        b.platform,
+      guestName:     b.guestName,
+      checkIn:       b.checkIn,
+      checkOut:      b.checkOut,
+      nights:        b.nights,
+      bookingAmount: String(b.roomAmount),
+      notes:         b.notes ?? '',
+      bookingType:   b.bookingType,
     });
     setModalOpen(true);
   }
@@ -330,12 +338,13 @@ export function BookingsClient({
         platforms={platformOptions}
       />
 
-      {/* ── 4 KPI cards — verbatim from bookKpis HTML ────────────────────── */}
+      {/* ── 5 KPI cards ──────────────────────────────────────────────────── */}
       <MetricCardGrid>
-        <MetricCard label="Period Revenue" value={fI(totalRev)}       sub="Total booking revenue" iconText="₹" iconVariant="g" />
-        <MetricCard label="Nights"         value={String(totalNights)} sub="Total booked nights"  iconText="🌙" iconVariant="o" />
-        <MetricCard label="Guests"         value={String(uniqueGuests)} sub="Unique guests"       iconText="👤" iconVariant="b" />
-        <MetricCard label="Avg/Night"      value={fI(avgPerNight)}     sub="Average per night"   iconText="₹" iconVariant="b" />
+        <MetricCard label="Period Revenue" value={fI(totalRev)}        sub="Total booking revenue"  iconText="₹"  iconVariant="g" />
+        <MetricCard label="Nights"         value={String(totalNights)}  sub="Total booked nights"   iconText="🌙" iconVariant="o" />
+        <MetricCard label="Guests"         value={String(uniqueGuests)} sub="Unique guests"          iconText="👤" iconVariant="b" />
+        <MetricCard label="Avg/Night"      value={stayNights > 0 ? fI(avgPerNight) : '—'} sub="Stay bookings only" iconText="₹" iconVariant="b" />
+        <MetricCard label="Events"         value={String(eventCount)}   sub="Event bookings"         iconText="🎉" iconVariant="o" />
       </MetricCardGrid>
 
       {/* ── Table card ───────────────────────────────────────────────────── */}
@@ -366,7 +375,6 @@ export function BookingsClient({
                 </thead>
                 <tbody>
                   {paginated.map((b) => {
-                    const isEvent = b.bookingType === 'event';
                     return (
                       <tr key={b.id}>
                         <td>
@@ -375,8 +383,8 @@ export function BookingsClient({
                         </td>
                         <td>{b.propertyName}</td>
                         <td>
-                          {isEvent && (
-                            <span className="pill o" style={{ fontSize: '9px', marginRight: '4px' }}>Event</span>
+                          {b.bookingType === 'event' && (
+                            <span className="pill o" style={{ fontSize: '9px', marginRight: '4px' }}>🎉 Event</span>
                           )}
                           {b.guestName}
                         </td>
