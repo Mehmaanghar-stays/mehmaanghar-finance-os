@@ -2,13 +2,12 @@
 // src/app/(dashboard)/investors/InvestorsClient.tsx
 //
 // Client Component. Renders:
-//   - Investor table (name, property pill, capital, equity, net payout, ROI)
-//   - ROI displayed via values pre-computed server-side with calcROI()
+//   - Investor table (name, property pill, capital, profit share%, net payout, ROI)
+//   - Net payout = property invProfit × (investor sharePct / 100)
+//   - ROI pre-computed server-side with calcROI() on investor's actual share
 //   - Add/Edit modal (InvModal)
-//   - Detail panel (DetailPanel from Run 4) with all-time KPIs + history
-//   - Two charts: Payout bar + Payout Distribution donut (InvCharts)
-//
-// HTML source: rndInvs(), editInv(), saveInv(), delInv(), computeInvestorROI()
+//   - Detail panel with all-time KPIs + period history (investor's share only)
+//   - Charts: Payout bar + Payout Distribution donut (InvCharts)
 
 import { useState, useMemo, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,7 +16,6 @@ import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
-import { aggReps, withD } from '@/lib/period';
 import type { RepRow } from '@/lib/period';
 import { formatROI } from '@/lib/finance';
 import { DetailPanel } from '@/components/ui/DetailPanel';
@@ -105,7 +103,7 @@ export function InvestorsClient({
 
   const propById = useMemo(
     () => (pid: string) => propMap[pid]
-      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].effectiveComm ?? propMap[pid].comm }
       : null,
     [propMap],
   );
@@ -131,11 +129,12 @@ export function InvestorsClient({
   );
 
   // ── Per-investor net payout for current period ────────────────────────────
+  // Each investor's payout = property invProfit × (their sharePct / 100).
   const invPayoutMap = useMemo(() => {
     const m: Record<string, number> = {};
     investors.forEach((inv) => {
       const invReps = filteredReps.filter((r) => r.pid === inv.propertyId);
-      m[inv.id] = invReps.reduce((s, r) => s + r.invProfit, 0);
+      m[inv.id] = invReps.reduce((s, r) => s + r.invProfit * (inv.sharePct / 100), 0);
     });
     return m;
   }, [filteredReps, investors]);
@@ -225,12 +224,22 @@ export function InvestorsClient({
       .sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
   }, [panelInv, allReps]);
 
-  const panelAgg = useMemo(
-    () => (panelAllReps.length
-      ? withD(aggReps(panelAllReps, (pid) => propMap[pid]?.capital ?? 0))
-      : null),
-    [panelAllReps, propMap],
-  );
+  // Investor's actual share = invProfit × (sharePct / 100) per report.
+  // We compute a scaled aggregate manually rather than using aggReps,
+  // since aggReps sums the full property pool without the per-investor split.
+  const panelAgg = useMemo(() => {
+    if (!panelInv || !panelAllReps.length) return null;
+    const shareFraction = (panelInv.sharePct || 0) / 100;
+    const agg = {
+      rev:        panelAllReps.reduce((s, r) => s + r.rev, 0),
+      exp:        panelAllReps.reduce((s, r) => s + r.exp, 0),
+      opProfit:   panelAllReps.reduce((s, r) => s + r.opProfit, 0),
+      commission: panelAllReps.reduce((s, r) => s + r.commission, 0),
+      // Investor net = only their share of the investor pool
+      invProfit:  panelAllReps.reduce((s, r) => s + r.invProfit * shareFraction, 0),
+    };
+    return agg;
+  }, [panelInv, panelAllReps]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -265,7 +274,7 @@ export function InvestorsClient({
                   <th>Investor</th>
                   <th>Properties</th>
                   <th>Capital</th>
-                  <th>Equity%</th>
+                  <th>Profit Share%</th>
                   <th>Net Payout</th>
                   <th>ROI</th>
                   {(canEdit || canDelete) && <th>Actions</th>}
@@ -304,7 +313,7 @@ export function InvestorsClient({
                       {/* Capital */}
                       <td>{inv.capital ? fF(inv.capital) : '—'}</td>
 
-                      {/* Equity % */}
+                      {/* Profit Share % */}
                       <td>{inv.sharePct ? inv.sharePct + '%' : '—'}</td>
 
                       {/* Net payout (period-filtered) */}
@@ -392,7 +401,7 @@ export function InvestorsClient({
             ? [
                 panelInv.contact || null,
                 panelInv.capital ? `Capital: ${fF(panelInv.capital)}` : null,
-                panelInv.sharePct ? `Equity: ${panelInv.sharePct}%` : null,
+                panelInv.sharePct ? `Profit Share: ${panelInv.sharePct}%` : null,
               ].filter(Boolean).join(' · ')
             : ''
         }
@@ -435,7 +444,7 @@ export function InvestorsClient({
                 </div>
 
                 {panelAllReps.length > 0 && (
-                  <InvReportHistory reps={panelAllReps} MS={MS} />
+                  <InvReportHistory reps={panelAllReps} MS={MS} sharePct={panelInv.sharePct} />
                 )}
               </>
             ) : (
@@ -457,10 +466,11 @@ export function InvestorsClient({
 // ---------------------------------------------------------------------------
 
 function InvReportHistory({
-  reps, MS,
+  reps, MS, sharePct,
 }: {
   reps: SerializableReport[];
   MS: string[];
+  sharePct: number;
 }) {
   const [open, setOpen] = useState(false);
   const fI = (n: number) => {
@@ -469,6 +479,7 @@ function InvReportHistory({
     if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
     return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
   };
+  const fraction = (sharePct || 0) / 100;
 
   return (
     <div style={{ marginTop: '8px' }}>
@@ -488,7 +499,7 @@ function InvReportHistory({
                 <th>Revenue</th>
                 <th>Op.Profit</th>
                 <th>Commission</th>
-                <th>Investor Net</th>
+                <th>My Share</th>
                 <th>Occ</th>
               </tr>
             </thead>
@@ -499,7 +510,7 @@ function InvReportHistory({
                   <td>{fI(r.rev)}</td>
                   <td style={{ color: 'var(--gr)' }}>{fI(r.opProfit)}</td>
                   <td style={{ color: 'var(--or)' }}>{fI(r.commission)}</td>
-                  <td style={{ color: 'var(--bl)' }}>{fI(r.invProfit)}</td>
+                  <td style={{ color: 'var(--bl)' }}>{fI(r.invProfit * fraction)}</td>
                   <td>{r.occ ?? 0}%</td>
                 </tr>
               ))}

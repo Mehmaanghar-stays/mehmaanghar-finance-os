@@ -60,11 +60,21 @@ export default async function PropertiesPage() {
     select: {
       id: true, name: true, address: true,
       city: true, state: true, comm: true,
-      capital: true, type: true, rooms: true, assets: true,
+      type: true, rooms: true, assets: true,
       broker_name: true, broker_pct: true, broker_public: true,
     },
     orderBy: { name: 'asc' },
   });
+
+  // Capital base = sum of investor.capital per property.
+  // Used for ROI display in table and detail panel.
+  const rawInvestorCapitals = await prisma.investor.findMany({
+    select: { property_id: true, capital: true },
+  });
+  const investorCapitalMap: Record<string, number> = {};
+  for (const inv of rawInvestorCapitals) {
+    investorCapitalMap[inv.property_id] = (investorCapitalMap[inv.property_id] ?? 0) + Number(inv.capital);
+  }
 
   const properties: SerializableProperty[] = rawProps.map((p) => {
     const comm       = Number(p.comm)       || 25;
@@ -76,7 +86,7 @@ export default async function PropertiesPage() {
       city:          p.city ?? '',
       state:         p.state ?? '',
       comm,
-      capital:       Number(p.capital) || 0,
+      capital:       investorCapitalMap[p.id] ?? 0,
       address:       p.address,
       type:          p.type ?? '',
       rooms:         Number(p.rooms) || 0,

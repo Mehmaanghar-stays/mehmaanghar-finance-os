@@ -184,7 +184,6 @@ export function PropertiesClient({
       comm:          stdComms.includes(commStr) ? commStr : 'custom',
       commCustom:    stdComms.includes(commStr) ? '' : commStr,
       address:       p.address ?? '',
-      capital:       p.capital ? String(p.capital) : '',
       assets:        (p.assets ?? []).map((a, i) => ({ ...a, id: i + 1, type: a.type as 'refundable' | 'recoverable' })),
       broker_name:   p.broker_name,
       broker_pct:    String(p.broker_pct),

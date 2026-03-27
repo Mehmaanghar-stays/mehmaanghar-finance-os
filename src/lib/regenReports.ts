@@ -65,7 +65,14 @@ export async function regenReports(): Promise<RegenResult> {
   });
 
   const properties = await prisma.property.findMany({
-    select: { id: true, comm: true, capital: true },
+    select: { id: true, comm: true },
+  });
+
+  // Load investors to compute capital base per property.
+  // Capital base = sum of investor.capital for investors linked to that property.
+  // This matches the report structure: total investment is the sum across all investors.
+  const investors = await prisma.investor.findMany({
+    select: { property_id: true, capital: true },
   });
 
   const existingReports = await prisma.report.findMany({
@@ -73,9 +80,20 @@ export async function regenReports(): Promise<RegenResult> {
   });
 
   // ── 2. Build O(1) lookups ────────────────────────────────────────────────
+  // Capital base per property = sum of linked investor capitals.
+  // If no investors are linked, capital = 0 → calcROI returns null → ROI shows N/A.
+  const investorCapitalMap = new Map<string, number>();
+  for (const inv of investors) {
+    const current = investorCapitalMap.get(inv.property_id) ?? 0;
+    investorCapitalMap.set(inv.property_id, current + Number(inv.capital));
+  }
+
   const propMap = new Map<string, { comm: number; capital: number }>();
   for (const p of properties) {
-    propMap.set(p.id, { comm: Number(p.comm), capital: Number(p.capital) });
+    propMap.set(p.id, {
+      comm:    Number(p.comm),
+      capital: investorCapitalMap.get(p.id) ?? 0,
+    });
   }
 
   // Existing report id lookup: "pid_month_year" → report.id

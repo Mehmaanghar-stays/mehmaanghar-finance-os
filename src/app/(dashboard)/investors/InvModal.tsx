@@ -132,13 +132,13 @@ export function InvModal({
           />
         </div>
         <div className={styles.fl}>
-          <label>Equity %</label>
+          <label>Profit Share %</label>
           <input
             className={styles.fi}
             type="number"
             value={form.equity}
             onChange={(e) => set('equity', e.target.value)}
-            placeholder="40"
+            placeholder="e.g. 25"
             min={0}
             max={100}
           />
