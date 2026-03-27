@@ -27,7 +27,16 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { UtilModal } from './UtilModal';
 import type { UtilFormValues } from './UtilModal';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — utils only needs id, name, city
+// ---------------------------------------------------------------------------
+
+export interface UtilsProperty {
+  id:   string;
+  name: string;
+  city: string;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,7 +83,7 @@ const TAB_LABEL: Record<UtilTab, string> = {
 
 interface UtilsClientProps {
   entries: UtilEntry[];
-  properties: SerializableProperty[];
+  properties: UtilsProperty[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
