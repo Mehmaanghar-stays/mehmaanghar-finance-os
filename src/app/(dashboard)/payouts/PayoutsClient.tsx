@@ -18,7 +18,7 @@
 //   HTML.amount    → amount_owed (Decimal)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
@@ -100,8 +100,6 @@ function filterByPeriod(
 
 interface PayoutsClientProps {
   payouts: SerializablePayout[];
-  /** All-time pending count (for Sidebar badge — passed as a prop) */
-  totalPendingCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,7 +108,6 @@ interface PayoutsClientProps {
 
 export function PayoutsClient({
   payouts,
-  totalPendingCount: initialPendingCount,
 }: PayoutsClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -160,6 +157,9 @@ export function PayoutsClient({
     if (filters.investor !== 'all') rows = rows.filter((p) => p.investorId === filters.investor);
     return rows.sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
   }, [periodPays, filters.status, filters.investor]);
+
+  // Reset to page 1 whenever filtered results change
+  useEffect(() => { setPage(1); }, [filteredPays.length]);
 
   // ── KPI derivations (always from periodPays) ──────────────────────────────
   const totalPayable    = periodPays.reduce((s, p) => s + p.amountOwed, 0);
@@ -222,7 +222,7 @@ export function PayoutsClient({
     try {
       const res = await fetch(`/api/payouts/${pay.id}`, { method: 'DELETE' });
       if (!res.ok) { const err = await res.json().catch(() => ({})); toast(err.error ?? 'Failed to delete', 'er'); return; }
-      toast('Payout deleted', 'er');
+      toast('✓ Payout deleted', 'ok');
       startTransition(() => router.refresh());
     } catch { toast('Network error', 'er'); }
   }
