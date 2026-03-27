@@ -10,7 +10,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import styles from '@/components/ui/ui.module.css';
-import type { SerializableProperty } from '../properties/page';
+import type { BookingProperty } from './BookingsClient';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,7 +85,7 @@ interface BookingModalProps {
   onClose: () => void;
   editId: string | null;
   initialValues?: Partial<BookingFormValues>;
-  properties: SerializableProperty[];
+  properties: BookingProperty[];
   guestNames: string[];
   onSave: (payload: BookingSavePayload, editId: string | null) => Promise<void>;
   isSaving: boolean;

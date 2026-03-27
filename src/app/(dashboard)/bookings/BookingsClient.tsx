@@ -20,7 +20,15 @@ import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/components/ui/Toast';
 import { BookingModal } from './BookingModal';
 import type { BookingFormValues, BookingSavePayload } from './BookingModal';
-import type { SerializableProperty } from '../properties/page';
+// ---------------------------------------------------------------------------
+// Minimal property type — bookings only needs id, name, city for filter + modal
+// ---------------------------------------------------------------------------
+
+export interface BookingProperty {
+  id:   string;
+  name: string;
+  city: string;
+}
 
 // ---------------------------------------------------------------------------
 // bookingMatchesPeriod — overlap-aware period filter for bookings.
@@ -159,7 +167,7 @@ export interface SerializableBooking {
 
 interface BookingsClientProps {
   bookings: SerializableBooking[];
-  properties: SerializableProperty[];
+  properties: BookingProperty[];
   guestNames: string[];
   canCreate: boolean;
   canEdit: boolean;
