@@ -153,7 +153,8 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
   const repeat      = activeGuests.filter((g) => (guestPeriodMap[g.id]?.stays ?? 0) > 1).length;
   const returnRate  = tot > 0 ? +((repeat / tot) * 100).toFixed(0) : 0;
   const totalSpend  = activeGuests.reduce((s, g) => s + (guestPeriodMap[g.id]?.spend ?? 0), 0);
-  const avgCLV      = tot > 0 ? +(totalSpend / tot).toFixed(2) : 0;
+  // avgCLV = average all-time spend per active guest (true lifetime value, not period spend)
+  const avgCLV      = tot > 0 ? +(activeGuests.reduce((s, g) => s + g.allTimeSpend, 0) / tot).toFixed(2) : 0;
   const allRatings  = activeGuests
     .map((g) => g.avgRating)
     .filter((r): r is number => r !== null && r > 0);

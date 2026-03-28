@@ -29,7 +29,18 @@ import type { RepRow, PeriodState } from '@/lib/period';
 import { useToast } from '@/components/ui/Toast';
 import styles from '@/components/ui/ui.module.css';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — insights needs id, name, city, comm, capital
+// ---------------------------------------------------------------------------
+
+export interface InsightsProperty {
+  id:      string;
+  name:    string;
+  city:    string;
+  comm:    number;
+  capital: number;
+}
 
 const InsightCharts = dynamic(
   () => import('./InsightCharts').then((m) => ({ default: m.InsightCharts })),
@@ -123,7 +134,7 @@ type AggResult = NonNullable<ReturnType<typeof withD>>;
 function genInsights(
   rs: RepRow[],
   a: AggResult,
-  propMap: Record<string, SerializableProperty>,
+  propMap: Record<string, InsightsProperty>,
 ): InsightItem[] {
   const ins: InsightItem[] = [];
 
@@ -188,7 +199,7 @@ const BLANK_TARGETS: Targets = { revenue: 0, occupancy: 0, roi: 0, expense_limit
 
 interface InsightsClientProps {
   reports: SerializableReport[];
-  properties: SerializableProperty[];
+  properties: InsightsProperty[];
   /** Server-fetched targets for current month/year. Empty object if none. */
   initialTargets: Partial<Targets>;
 }
@@ -359,7 +370,7 @@ export function InsightsClient({
                      targets.roi > 0 || targets.expense_limit > 0;
 
   // ── Empty state ───────────────────────────────────────────────────────────
-  if (!agg || !agg.rev) {
+  if (!agg || (!agg.rev && !agg.exp)) {
     return (
       <>
         <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
