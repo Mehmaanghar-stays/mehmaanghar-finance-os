@@ -18,9 +18,13 @@
 //   HTML.amount    → amount_owed (Decimal)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { getFYMonths } from '@/lib/period';
 import type { PeriodState } from '@/lib/period';
 import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
@@ -38,15 +42,17 @@ const MN = ['','January','February','March','April','May','June',
             'July','August','September','October','November','December'];
 
 // ---------------------------------------------------------------------------
-// Formatting helpers
+// Formatting helpers — full precision with 2 decimal places
 // ---------------------------------------------------------------------------
 
-const fIN = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fIN = (n: number) =>
+  '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fI  = (n: number) => {
-  const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  const num = Number(n) || 0;
+  const v = Math.abs(num);
+  if (v >= 100000) return (num < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (num < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (num < 0 ? '-' : '') + '₹' + v.toFixed(2);
 };
 
 // ---------------------------------------------------------------------------
@@ -95,8 +101,6 @@ function filterByPeriod(
 
 interface PayoutsClientProps {
   payouts: SerializablePayout[];
-  /** All-time pending count (for Sidebar badge — passed as a prop) */
-  totalPendingCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,19 +109,22 @@ interface PayoutsClientProps {
 
 export function PayoutsClient({
   payouts,
-  totalPendingCount: initialPendingCount,
 }: PayoutsClientProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [, startTransition] = useTransition();
 
   // ── Local state ───────────────────────────────────────────────────────────
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'paid'>('all');
-  const [invFilter,    setInvFilter]    = useState('all');
-  const [page, setPage]                 = useState(1);
+  const [page, setPage] = useState(1);
 
-  // ── Period store ──────────────────────────────────────────────────────────
+  // Pay modal — replaces window.prompt for payment reference entry
+  const [payModal, setPayModal]   = useState<{ id: string; investorName: string; amount: number } | null>(null);
+  const [payRef,   setPayRef]     = useState('');
+  const [isPaying, setIsPaying]   = useState(false);
+
+  // ── Period store + per-page filters ───────────────────────────────────────
   const periodState = usePeriod();
+  const filters = usePageFilters({ investor: true, status: true });
 
   // ── Period-filtered (Pass 1 — for KPIs) ──────────────────────────────────
   const periodPays = useMemo(
@@ -127,30 +134,56 @@ export function PayoutsClient({
      periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo],
   );
 
+  // ── Unique investors for filter dropdown ──────────────────────────────────
+  // Group by name+contact so the same person investing in multiple properties
+  // appears only once in the dropdown.
+  const uniqueInvestors = useMemo(() => {
+    const seen = new Map<string, string>(); // groupKey → display name
+    payouts.forEach((p) => {
+      const key = `${p.investorName.trim()}||${(p.investorContact ?? '').trim()}`;
+      if (!seen.has(key)) seen.set(key, p.investorName);
+    });
+    return [...seen.entries()]
+      .map(([key, name]) => ({ key, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [payouts]);
+
+  const investorOptions: FilterOption[] = useMemo(
+    () => uniqueInvestors.map((i) => ({ value: i.key, label: i.name })),
+    [uniqueInvestors],
+  );
+
+  const statusOptions: FilterOption[] = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'paid',    label: 'Paid'    },
+  ];
+
   // ── Period + status + investor filter (Pass 2 — for table) ───────────────
   const filteredPays = useMemo(() => {
     let rows = [...periodPays];
-    if (statusFilter !== 'all') rows = rows.filter((p) => p.status === statusFilter);
-    if (invFilter    !== 'all') rows = rows.filter((p) => p.investorId === invFilter);
+    if (filters.status !== 'all') rows = rows.filter((p) => p.status === filters.status);
+    if (filters.investor !== 'all') {
+      // filters.investor is the groupKey (name||contact) — match all records for this person
+      rows = rows.filter((p) => {
+        const key = `${p.investorName.trim()}||${(p.investorContact ?? '').trim()}`;
+        return key === filters.investor;
+      });
+    }
     return rows.sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
-  }, [periodPays, statusFilter, invFilter]);
+  }, [periodPays, filters.status, filters.investor]);
 
-  // ── KPI derivations (always from periodPays, verbatim from HTML) ──────────
+  // Reset to page 1 whenever filtered results change
+  useEffect(() => { setPage(1); }, [filteredPays.length]);
+
+  // ── KPI derivations (always from periodPays) ──────────────────────────────
   const totalPayable    = periodPays.reduce((s, p) => s + p.amountOwed, 0);
   const pendingAmount   = periodPays.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amountOwed, 0);
   const paidAmount      = periodPays.filter((p) => p.status === 'paid').reduce((s, p) => s + p.amountOwed, 0);
   const pendingCount    = periodPays.filter((p) => p.status === 'pending').length;
 
   // All-time pending count (for the summary strip)
-  const allTimePending  = payouts.filter((p) => p.status === 'pending').length;
+  const allTimePending    = payouts.filter((p) => p.status === 'pending').length;
   const allTimePendingAmt = payouts.filter((p) => p.status === 'pending').reduce((s, p) => s + p.amountOwed, 0);
-
-  // ── Unique investors (for filter dropdown) ────────────────────────────────
-  const uniqueInvestors = useMemo(() => {
-    const seen = new Map<string, string>();
-    payouts.forEach((p) => { if (!seen.has(p.investorId)) seen.set(p.investorId, p.investorName); });
-    return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [payouts]);
 
   // ── Pagination ────────────────────────────────────────────────────────────
   const totalPages = Math.max(1, Math.ceil(filteredPays.length / PAGE_SIZE));
@@ -158,39 +191,44 @@ export function PayoutsClient({
   const pagePays   = filteredPays.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   // ── Toggle status (Mark Paid / Revert to Pending) ─────────────────────────
-  async function handleToggleStatus(pay: SerializablePayout) {
-    if (pay.status === 'pending') {
-      // Mark as paid — prompt for reference
-      const ref = window.prompt('Enter payment reference / transaction ID (optional):', '') ?? null;
-      if (ref === null) return; // user cancelled
+  function handleMarkPaid(pay: SerializablePayout) {
+    setPayRef('');
+    setPayModal({ id: pay.id, investorName: pay.investorName, amount: pay.amountOwed });
+  }
 
-      try {
-        const res = await fetch(`/api/payouts/${pay.id}`, {
-          method:  'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            status:    'paid',
-            reference: ref,
-            paidOn:    new Date().toISOString().split('T')[0],
-          }),
-        });
-        if (!res.ok) { const err = await res.json().catch(() => ({})); toast(err.error ?? 'Failed', 'er'); return; }
-        toast('✓ Payout marked as paid', 'ok');
-        startTransition(() => router.refresh());
-      } catch { toast('Network error', 'er'); }
-    } else {
-      if (!window.confirm('Revert this payout to pending?')) return;
-      try {
-        const res = await fetch(`/api/payouts/${pay.id}`, {
-          method:  'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'pending' }),
-        });
-        if (!res.ok) { const err = await res.json().catch(() => ({})); toast(err.error ?? 'Failed', 'er'); return; }
-        toast('↩ Payout reverted to pending', 'ok');
-        startTransition(() => router.refresh());
-      } catch { toast('Network error', 'er'); }
-    }
+  async function confirmMarkPaid() {
+    if (!payModal) return;
+    setIsPaying(true);
+    try {
+      const res = await fetch(`/api/payouts/${payModal.id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status:    'paid',
+          reference: payRef.trim() || null,
+          paidOn:    new Date().toISOString().split('T')[0],
+        }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); toast(err.error ?? 'Failed', 'er'); return; }
+      toast('✓ Payout marked as paid', 'ok');
+      setPayModal(null);
+      startTransition(() => router.refresh());
+    } catch { toast('Network error', 'er'); }
+    finally { setIsPaying(false); }
+  }
+
+  async function handleRevertPending(pay: SerializablePayout) {
+    if (!window.confirm('Revert this payout to pending?')) return;
+    try {
+      const res = await fetch(`/api/payouts/${pay.id}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'pending' }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); toast(err.error ?? 'Failed', 'er'); return; }
+      toast('↩ Payout reverted to pending', 'ok');
+      startTransition(() => router.refresh());
+    } catch { toast('Network error', 'er'); }
   }
 
   async function handleDelete(pay: SerializablePayout) {
@@ -198,7 +236,7 @@ export function PayoutsClient({
     try {
       const res = await fetch(`/api/payouts/${pay.id}`, { method: 'DELETE' });
       if (!res.ok) { const err = await res.json().catch(() => ({})); toast(err.error ?? 'Failed to delete', 'er'); return; }
-      toast('Payout deleted', 'er');
+      toast('✓ Payout deleted', 'ok');
       startTransition(() => router.refresh());
     } catch { toast('Network error', 'er'); }
   }
@@ -206,63 +244,87 @@ export function PayoutsClient({
   async function handleSyncFromReports() {
     try {
       const res = await fetch('/api/payouts/sync', { method: 'POST' });
-      if (!res.ok) { toast('Sync failed — API not yet wired (Phase 6)', 'er'); return; }
+      if (!res.ok) { toast('Sync failed — please try again', 'er'); return; }
       const data = await res.json();
       toast(`✓ ${data.count ?? 0} payouts synced from reports`, 'ok');
       startTransition(() => router.refresh());
-    } catch { toast('Sync API not yet available (Phase 6)', 'in'); }
+    } catch { toast('Sync failed — network error', 'er'); }
   }
 
   async function handleRecalcPending() {
     try {
       const res = await fetch('/api/payouts/recalc', { method: 'POST' });
-      if (!res.ok) { toast('Recalc failed — API not yet wired (Phase 6)', 'er'); return; }
+      if (!res.ok) { toast('Recalculate failed — please try again', 'er'); return; }
       const data = await res.json();
       toast(`✓ ${data.updated ?? 0} pending payouts recalculated`, 'ok');
       startTransition(() => router.refresh());
-    } catch { toast('Recalc API not yet available (Phase 6)', 'in'); }
+    } catch { toast('Recalculate failed — network error', 'er'); }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div className="page-hdr">
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Investor Payout Ledger
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* Pending summary strip — verbatim colour logic */}
-          <span
-            id="pendingSummary"
-            style={{
-              background: allTimePending > 0 ? 'var(--rdp)' : 'var(--grp)',
-              color:      allTimePending > 0 ? 'var(--rd)'  : 'var(--gr)',
-              display:    allTimePending > 0 || payouts.length > 0 ? 'inline-flex' : 'none',
-            }}
-          >
-            {allTimePending > 0
-              ? `${allTimePending} Pending — ${fI(allTimePendingAmt)}`
-              : 'All Paid ✓'}
-          </span>
-          <button className="btn btn-or btn-sm" onClick={handleSyncFromReports}>
-            ↻ Sync from Reports
-          </button>
-          <button className="btn btn-g btn-sm" onClick={handleRecalcPending}>
-            ♻ Recalculate Pending
-          </button>
-          <button className="btn btn-g btn-sm" onClick={() => toast('CSV export — Phase 6', 'in')}>
-            Export CSV
-          </button>
+        <div className="page-hdr-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {(allTimePending > 0 || payouts.length > 0) && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
+              <span style={{ background: allTimePending > 0 ? 'var(--rdp)' : 'var(--grp)', color: allTimePending > 0 ? 'var(--rd)' : 'var(--gr)', display: 'inline-flex', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700 }}>
+                {allTimePending > 0 ? `${allTimePending} Pending (all-time) — ${fIN(allTimePendingAmt)}` : 'All Paid ✓'}
+              </span>
+              {pendingCount > 0 && pendingCount !== allTimePending && (
+                <span style={{ fontSize: '10.5px', color: 'var(--t3)' }}>{pendingCount} pending in this period</span>
+              )}
+            </div>
+          )}
+          <button className="btn btn-or btn-sm" onClick={handleSyncFromReports}>↻ Sync from Reports</button>
+          <button className="btn btn-g btn-sm" onClick={handleRecalcPending}>♻ Recalculate Pending</button>
+          <button className="btn btn-g btn-sm" onClick={() => {
+            downloadCsv(
+              ['Period', 'Investor', 'Property', 'City', 'Amount Owed', 'Status', 'Paid On', 'Reference', 'Notes'],
+              filteredPays.map((p) => [
+                `${MN[p.month] ?? '?'} ${p.year}`, p.investorName, p.propertyName,
+                p.propertyCity || '', String(p.amountOwed),
+                p.status === 'paid' ? 'Paid' : 'Pending',
+                p.paidOn ?? '', p.reference ?? '', p.notes ?? '',
+              ]),
+              `mg-payouts-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
+          }}>↓ CSV</button>
+          <button className="btn btn-or btn-sm" onClick={async () => {
+            const { exportTablePdf } = await import('@/components/layout/exportPdf');
+            await exportTablePdf({
+              title: 'Investor Payout Ledger',
+              headers: ['Period', 'Investor', 'Property', 'Amount Owed', 'Status', 'Paid On', 'Reference', 'Notes'],
+              rows: filteredPays.map((p) => [
+                `${MN[p.month] ?? '?'} ${p.year}`, p.investorName,
+                p.propertyCity ? `${p.propertyName}, ${p.propertyCity}` : p.propertyName,
+                'Rs. ' + p.amountOwed.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                p.status === 'paid' ? 'Paid' : 'Pending',
+                p.paidOn ?? '—', p.reference ?? '—', p.notes ?? '—',
+              ]),
+              filename: `mg-payouts-${new Date().toISOString().slice(0, 10)}.pdf`,
+            });
+          }}>↓ PDF</button>
         </div>
       </div>
 
-      {/* ── KPI cards (verbatim from HTML payoutKpis) ────────────────────── */}
+      <PageFilterBar
+        filters={filters}
+        config={{ investor: true, status: true }}
+        investors={investorOptions}
+        statuses={statusOptions}
+      />
+
+      {/* ── KPI cards ────────────────────────────────────────────────────── */}
       <MetricCardGrid>
-        <MetricCard label="Total Payable"    value={fI(totalPayable)}  sub="This period"                     iconText="₹" iconVariant="b" />
-        <MetricCard label="Pending Payouts"  value={fI(pendingAmount)} sub={pendingCount + ' records'}       iconText="₹" iconVariant="r" />
-        <MetricCard label="Total Paid"       value={fI(paidAmount)}    sub="This period"                     iconText="₹" iconVariant="g" />
-        <MetricCard label="Payout Records"   value={String(payouts.length)} sub="All time"                   iconText="₹" iconVariant="o" />
+        <MetricCard label="Total Payable"    value={fI(totalPayable)}  sub="This period"              iconText="₹" iconVariant="b" />
+        <MetricCard label="Pending Payouts"  value={fI(pendingAmount)} sub={pendingCount + ' records'} iconText="₹" iconVariant="r" />
+        <MetricCard label="Total Paid"       value={fI(paidAmount)}    sub="This period"              iconText="₹" iconVariant="g" />
+        <MetricCard label="Payout Records"   value={String(payouts.length)} sub="All time"            iconText="₹" iconVariant="o" />
       </MetricCardGrid>
 
       {/* ── Payout table ─────────────────────────────────────────────────── */}
@@ -273,29 +335,6 @@ export function PayoutsClient({
             <div className="cs" id="payoutSubtitle">
               {filteredPays.length} record{filteredPays.length !== 1 ? 's' : ''}{totalPages > 1 ? ` | Showing ${(safePage-1)*PAGE_SIZE+1}–${Math.min(safePage*PAGE_SIZE,filteredPays.length)}` : ''}
             </div>
-          </div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {/* Status filter */}
-            <select
-              className="fsel"
-              value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value as 'all'|'pending'|'paid'); setPage(1); }}
-            >
-              <option value="all">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="paid">Paid</option>
-            </select>
-            {/* Investor filter */}
-            <select
-              className="fsel"
-              value={invFilter}
-              onChange={(e) => { setInvFilter(e.target.value); setPage(1); }}
-            >
-              <option value="all">All Investors</option>
-              {uniqueInvestors.map((inv) => (
-                <option key={inv.id} value={inv.id}>{inv.name}</option>
-              ))}
-            </select>
           </div>
         </div>
 
@@ -371,19 +410,19 @@ export function PayoutsClient({
                           {pay.notes ?? ''}
                         </td>
                         <td style={{ whiteSpace: 'nowrap' }}>
-                          {/* Toggle status — verbatim green/grey button logic */}
+                          {/* Toggle status */}
                           {isPaid ? (
                             <button
                               className="btn btn-g btn-sm"
-                              title="Undo"
-                              onClick={() => handleToggleStatus(pay)}
+                              title="Revert to pending"
+                              onClick={() => handleRevertPending(pay)}
                             >
                               ↩
                             </button>
                           ) : (
                             <button
                               className="btn btn-gr btn-sm"
-                              onClick={() => handleToggleStatus(pay)}
+                              onClick={() => handleMarkPaid(pay)}
                             >
                               ✓ Paid
                             </button>
@@ -415,6 +454,67 @@ export function PayoutsClient({
           </>
         )}
       </div>
+
+      {/* ── Pay confirmation modal — replaces window.prompt ─────────────────── */}
+      {payModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setPayModal(null); }}
+        >
+          <div style={{
+            background: 'var(--card)', borderRadius: '14px', padding: '24px',
+            width: '380px', maxWidth: '94vw', boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+          }}>
+            <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '4px', color: 'var(--tx)' }}>
+              Mark Payout as Paid
+            </div>
+            <div style={{ fontSize: '12.5px', color: 'var(--t3)', marginBottom: '16px' }}>
+              {payModal.investorName} — {fIN(payModal.amount)}
+            </div>
+
+            <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', display: 'block', marginBottom: '6px' }}>
+              Payment Reference / UTR (optional)
+            </label>
+            <input
+              type="text"
+              value={payRef}
+              onChange={(e) => setPayRef(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && confirmMarkPaid()}
+              placeholder="e.g. UTR123456789"
+              autoFocus
+              style={{
+                width: '100%', padding: '9px 12px', fontSize: '13px',
+                border: '1.5px solid var(--bdr)', borderRadius: '8px',
+                background: 'var(--bg)', color: 'var(--tx)',
+                marginBottom: '16px', boxSizing: 'border-box',
+              }}
+            />
+
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-g btn-sm"
+                onClick={() => setPayModal(null)}
+                disabled={isPaying}
+                style={{ padding: '8px 18px' }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-or btn-sm"
+                onClick={confirmMarkPaid}
+                disabled={isPaying}
+                style={{ padding: '8px 18px' }}
+              >
+                {isPaying ? 'Saving…' : '✓ Confirm Paid'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

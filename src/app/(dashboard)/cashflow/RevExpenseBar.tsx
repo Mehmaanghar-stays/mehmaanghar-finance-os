@@ -31,9 +31,9 @@ ChartJS.defaults.color = CHART_DEFAULTS.color;
 export interface RevExpTrendPoint {
   /** Month label e.g. "Jan" */
   l: string;
-  /** Revenue in ₹K units */
+  /** Revenue in full rupees */
   rev: number;
-  /** Expenses in ₹K units */
+  /** Expenses in full rupees */
   exp: number;
 }
 
@@ -76,8 +76,15 @@ export function RevExpenseBar({ trend }: RevExpenseBarProps) {
       legend: legendConfig('top'),
       tooltip: {
         callbacks: {
-          label: (ctx: { dataset: { label?: string }; raw?: unknown }) =>
-            ` ${ctx.dataset.label}: ₹${ctx.raw}K`,
+          label: (ctx: { dataset: { label?: string }; raw?: unknown }) => {
+            const n = Number(ctx.raw ?? 0);
+            const v = Math.abs(n);
+            let fmt: string;
+            if (v >= 100000) fmt = '₹' + (n < 0 ? '-' : '') + (v / 100000).toFixed(2) + 'L';
+            else if (v >= 1000) fmt = '₹' + (n < 0 ? '-' : '') + (v / 1000).toFixed(2) + 'K';
+            else fmt = '₹' + n.toFixed(2);
+            return ` ${ctx.dataset.label}: ${fmt}`;
+          },
         },
       },
     },
@@ -85,7 +92,14 @@ export function RevExpenseBar({ trend }: RevExpenseBarProps) {
       x: { grid: { display: false } },
       y: {
         grid: { color: '#F1F0EC' },
-        ticks: { callback: (v: number | string) => '₹' + v + 'K' },
+        ticks: {
+          callback: (v: number | string) => {
+            const n = Number(v);
+            if (n >= 100000) return '₹' + (n / 100000).toFixed(1) + 'L';
+            if (n >= 1000)   return '₹' + (n / 1000).toFixed(0) + 'K';
+            return '₹' + n;
+          },
+        },
       },
     },
   };

@@ -24,7 +24,9 @@ export interface SerializableReport {
   roomRev: number;
   exp: number;
   opProfit: number;
-  commission: number;
+  commission: number;  // total commission (MHG + broker when public)
+  mgComm: number;      // MHG-only portion
+  brokerComm: number;  // broker portion (0 when broker is private)
   invProfit: number;
   nights: number;
   days: number;
@@ -34,15 +36,17 @@ export interface SerializableReport {
   revpar: number;
   channels: Record<string, number>;
   expCats: Record<string, number>;
+  /** true when investor capital > 0; false means ROI should show as N/A */
+  _hasCapital: boolean;
 }
 
 export interface SerializableProperty {
   id: string;
   name: string;
-  // city and comm added in the schema migration (see layout.tsx flag).
-  // Until then these default to "" and 25.
   city: string;
   comm: number;
+  capital: number;
+  assets: Array<{ name: string; amount: number; type: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +82,8 @@ export default async function DashboardPage() {
       exp:        Number(d.exp ?? 0),
       opProfit:   Number(d.opProfit ?? 0),
       commission: Number(d.commission ?? 0),
+      mgComm:     Number(d.mgComm     ?? d.commission ?? 0),
+      brokerComm: Number(d.brokerComm  ?? 0),
       invProfit:  Number(d.invProfit ?? 0),
       nights:     Number(d.nights ?? 0),
       days:       Number(d.days ?? 0),
@@ -85,27 +91,63 @@ export default async function DashboardPage() {
       roi:        Number(d.roi ?? 0),
       adr:        Number(d.adr ?? 0),
       revpar:     Number(d.revpar ?? 0),
-      channels:   (d.channels as Record<string, number>) ?? {},
-      expCats:    (d.expCats as Record<string, number>) ?? {},
+      channels:    (d.channels as Record<string, number>) ?? {},
+      expCats:     (d.expCats as Record<string, number>) ?? {},
+      _hasCapital: Boolean(d._hasCapital),
     }];
   });
 
-  // Fetch properties for lookup (name, city, comm).
-  // SCHEMA GAP: city/comm not yet in schema. Defaults applied here.
+  // Fetch properties for lookup (name, city, comm, assets).
   const rawProperties = await prisma.property.findMany({
-    select: { id: true, name: true },
+    select: { id: true, name: true, city: true, comm: true, assets: true },
     orderBy: { name: 'asc' },
   });
 
+  // Capital base = sum of investor.capital per property — same as regenReports and properties page.
+  const rawInvestorCapitals = await prisma.investor.findMany({
+    select: { property_id: true, capital: true },
+  });
+  const investorCapitalMap: Record<string, number> = {};
+  for (const inv of rawInvestorCapitals) {
+    investorCapitalMap[inv.property_id] = (investorCapitalMap[inv.property_id] ?? 0) + Number(inv.capital);
+  }
+
   const properties: SerializableProperty[] = rawProperties.map((p) => ({
-    id: p.id,
-    name: p.name,
-    // Replace with real p.city / Number(p.comm) after schema migration.
-    city: '',
-    comm: 25,
+    id:      p.id,
+    name:    p.name,
+    city:    p.city,
+    comm:    Number(p.comm),
+    capital: investorCapitalMap[p.id] ?? 0,
+    assets:  (p.assets as Array<{ name: string; amount: number; type: string }>) ?? [],
   }));
 
+  // Fetch expense goal for current month from UtilsSetting.
+  // Key: targets_{year}_{month} — shared with Smart Insights targets.
+  // The expense_limit field is the Dashboard Expense Goal.
+  const now        = new Date();
+  const cM         = now.getMonth() + 1;
+  const cY         = now.getFullYear();
+  const targetKey  = `targets_${cY}_${cM}`;
+  let initialExpenseGoal = 0;
+  try {
+    const setting = await prisma.utilsSetting.findUnique({
+      where: { key: targetKey },
+    });
+    if (setting?.value && typeof setting.value === 'object') {
+      const v = setting.value as Record<string, unknown>;
+      initialExpenseGoal = Number(v.expense_limit ?? 0) || 0;
+    }
+  } catch {
+    // No row yet — goal starts at 0 (not set)
+  }
+
   return (
-    <DashboardClient reports={reports} properties={properties} />
+    <DashboardClient
+      reports={reports}
+      properties={properties}
+      initialExpenseGoal={initialExpenseGoal}
+      goalMonth={cM}
+      goalYear={cY}
+    />
   );
 }

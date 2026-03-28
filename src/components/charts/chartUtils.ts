@@ -15,21 +15,24 @@ export const MS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ---------------------------------------------------------------------------
-// Formatting helpers — verbatim port of fI() and fIN() from the HTML
+// Formatting helpers — full precision with 2 decimal places
 // ---------------------------------------------------------------------------
 
-/** Compact Indian format: ₹12.4L, ₹5K, ₹999 */
+/** Compact Indian format with 2dp: ₹12.45L, ₹5.23K, ₹999.00 */
 export function fI(n: number): string {
-  if (!n && n !== 0) return '₹0';
+  if (!n && n !== 0) return '₹0.00';
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
 
-/** Full Indian locale format: ₹1,23,456 */
+/** Full Indian locale format with 2dp: ₹1,23,456.00 */
 export function fIN(n: number): string {
-  return '₹' + Math.round(n || 0).toLocaleString('en-IN');
+  return '₹' + (Number(n) || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +61,6 @@ export const CHART_DEFAULTS = {
 export const richTooltipCallbacks = {
   title(items: TooltipItem<'bar' | 'line' | 'doughnut'>[]) {
     const lbl = items[0]?.label ?? '';
-    // Expand abbreviated month to full name (matches MN/MS arrays)
     const fullMonth = MN[MS.indexOf(lbl)] ?? lbl;
     return fullMonth;
   },
@@ -71,8 +73,9 @@ export const richTooltipCallbacks = {
     const isPct =
       ds.includes('%') ||
       /occ|roi/i.test(ds);
-    if (isCurr) return ` ${ds}: ${fIN(Math.round((v ?? 0) * 1000))}`;
-    if (isPct)  return ` ${ds}: ${v ?? 0}%`;
+    // Charts now receive full rupee values — no * 1000 conversion needed
+    if (isCurr) return ` ${ds}: ${fIN(v ?? 0)}`;
+    if (isPct)  return ` ${ds}: ${(v ?? 0).toFixed(1)}%`;
     return ` ${ds}: ${fIN(v ?? 0)}`;
   },
 };

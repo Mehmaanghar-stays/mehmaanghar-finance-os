@@ -59,8 +59,9 @@ export interface SerializablePayout {
   propertyId: string;
   propertyName: string;
   propertyCity: string;
-  investorId: string;
-  investorName: string;
+  investorId:      string;
+  investorName:    string;
+  investorContact: string;
   year: number;
   month: number;
   amountOwed: number;
@@ -104,9 +105,9 @@ export default async function PayoutsPage() {
       notes:       true,
       property:    { select: {
         name: true,
-        // city available post-migration; safe cast for now
+        city: true,
       }},
-      investor:    { select: { name: true } },
+      investor:    { select: { name: true, contact: true } },
     },
     orderBy: [{ year: 'desc' }, { month: 'desc' }],
   });
@@ -115,9 +116,10 @@ export default async function PayoutsPage() {
     id:           p.id,
     propertyId:   p.property_id,
     propertyName: p.property.name,
-    propertyCity: (p.property as Record<string, unknown>).city as string ?? '',
-    investorId:   p.investor_id,
-    investorName: p.investor.name,
+    propertyCity: p.property.city ?? '',
+    investorId:      p.investor_id,
+    investorName:    p.investor.name,
+    investorContact: p.investor.contact ?? '',
     year:         p.year,
     month:        p.month,
     amountOwed:   Number(p.amount_owed),
@@ -127,13 +129,9 @@ export default async function PayoutsPage() {
     notes:        p.notes,
   }));
 
-  // ── All-time pending count (for pending summary strip) ────────────────────
-  const totalPendingCount = payouts.filter((p) => p.status === 'pending').length;
-
   return (
     <PayoutsClient
       payouts={payouts}
-      totalPendingCount={totalPendingCount}
     />
   );
 }

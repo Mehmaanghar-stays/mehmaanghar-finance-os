@@ -43,8 +43,7 @@ import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getRolePermissions } from '@/lib/permissions';
 import { UtilsClient } from './UtilsClient';
-import type { UtilEntry } from './UtilsClient';
-import type { SerializableProperty } from '../properties/page';
+import type { UtilEntry, UtilsProperty } from './UtilsClient';
 
 const UTILS_STORAGE_KEY = 'utils_entries';
 
@@ -94,23 +93,15 @@ export default async function UtilsPage() {
     // UtilsSetting key not yet created — safe empty default
   }
 
-  // ── Fetch properties ──────────────────────────────────────────────────────
+  // ── Fetch properties — only id, name, city needed for filter + modal ─────
   const rawProps = await prisma.property.findMany({
-    select: { id: true, name: true, address: true },
+    select: { id: true, name: true, city: true },
     orderBy: { name: 'asc' },
   });
-
-  const properties: SerializableProperty[] = rawProps.map((p) => ({
-    id:      p.id,
-    name:    p.name,
-    city:    (p as Record<string, unknown>).city  as string ?? '',
-    state:   (p as Record<string, unknown>).state as string ?? '',
-    comm:    Number((p as Record<string, unknown>).comm)    || 25,
-    capital: Number((p as Record<string, unknown>).capital) || 0,
-    address: p.address,
-    type:    (p as Record<string, unknown>).type  as string ?? '',
-    rooms:   Number((p as Record<string, unknown>).rooms)   || 0,
-    assets:  ((p as Record<string, unknown>).assets as SerializableProperty['assets']) ?? [],
+  const properties: UtilsProperty[] = rawProps.map((p) => ({
+    id:   p.id,
+    name: p.name,
+    city: p.city ?? '',
   }));
 
   return (

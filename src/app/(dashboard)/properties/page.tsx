@@ -1,23 +1,5 @@
 // src/app/(dashboard)/properties/page.tsx
-//
-// Properties page — Server Component shell.
-//
-// Fetches properties + reports + role permissions, then renders
-// <PropertiesClient /> with serializable props.
-//
-// HTML source: <div class="page" id="page-properties"> + rndProps()
-//
-// ═══ SCHEMA MIGRATION REQUIRED ═══════════════════════════════════════════
-// The Property model needs city, comm, state, capital, type, rooms, assets
-// fields before this page is fully functional. See SCHEMA_MIGRATION_property_fields.ts
-// in the outputs directory.
-//
-// Until the migration is applied:
-//   - city / state display as blank
-//   - comm defaults to 25 (no commission breakdown in table)
-//   - capital defaults to 0 (ROI shows N/A — correct fallback)
-//   - assets defaults to []
-// ═════════════════════════════════════════════════════════════════════════
+// Server Component shell — fetches properties + reports + permissions.
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -27,24 +9,29 @@ import { getRolePermissions } from '@/lib/permissions';
 import { PropertiesClient } from './PropertiesClient';
 import type { SerializableReport } from '../dashboard/page';
 
-// Re-export for PropertiesClient.tsx which imports from './page'
 export type { SerializableReport };
 
 // ---------------------------------------------------------------------------
-// Serializable property type
+// Types
 // ---------------------------------------------------------------------------
 
 export interface SerializableProperty {
-  id: string;
-  name: string;
-  city: string;
-  state: string;
-  comm: number;
-  capital: number;
-  address: string | null;
-  type: string;
-  rooms: number;
-  assets: Array<{ name: string; amount: number; type: string }>;
+  id:            string;
+  name:          string;
+  city:          string;
+  state:         string;
+  comm:          number;
+  capital:       number;
+  address:       string | null;
+  type:          string;
+  rooms:         number;
+  assets:        Array<{ name: string; amount: number; type: string }>;
+  // Broker fields
+  broker_name:   string;
+  broker_pct:    number;
+  broker_public: boolean;
+  // Derived server-side — avoids recalculation in every component
+  effectiveComm: number; // broker_public ? comm + broker_pct : comm
 }
 
 // ---------------------------------------------------------------------------
@@ -52,53 +39,66 @@ export interface SerializableProperty {
 // ---------------------------------------------------------------------------
 
 export default async function PropertiesPage() {
-  // ── Session ───────────────────────────────────────────────────────────────
-  const cookieName = process.env.COOKIE_NAME ?? 'mg_session';
+  const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
   const cookieStore = await cookies();
-  const token = cookieStore.get(cookieName)?.value ?? '';
-  const session = token ? await verifyToken(token) : null;
+  const token       = cookieStore.get(cookieName)?.value ?? '';
+  const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  // ── Role permissions ──────────────────────────────────────────────────────
-  const rolePerms = await getRolePermissions(session.role);
+  const rolePerms  = await getRolePermissions(session.role);
   const tabPerms   = rolePerms?.tabPermissions  ?? {};
   const crudPerms  = rolePerms?.crudPermissions ?? {};
+
+  if (tabPerms['properties'] !== true) redirect('/dashboard');
 
   const canCreate = crudPerms['properties']?.create === true;
   const canEdit   = crudPerms['properties']?.update === true;
   const canDelete = crudPerms['properties']?.delete === true;
 
-  // Guard: if the role cannot read this tab, redirect (extra safety beyond proxy)
-  if (tabPerms['properties'] !== true) redirect('/dashboard');
-
   // ── Fetch properties ──────────────────────────────────────────────────────
-  // SCHEMA GAP: city, comm, state, capital, type, rooms, assets not yet in schema.
-  // After migration, add them to the select block here.
   const rawProps = await prisma.property.findMany({
     select: {
-      id: true,
-      name: true,
-      address: true,
-      // TODO after migration: city: true, state: true, comm: true,
-      //                       capital: true, type: true, rooms: true, assets: true
+      id: true, name: true, address: true,
+      city: true, state: true, comm: true,
+      type: true, rooms: true, assets: true,
+      broker_name: true, broker_pct: true, broker_public: true,
     },
     orderBy: { name: 'asc' },
   });
 
-  const properties: SerializableProperty[] = rawProps.map((p) => ({
-    id:      p.id,
-    name:    p.name,
-    city:    (p as Record<string, unknown>).city   as string  ?? '',
-    state:   (p as Record<string, unknown>).state  as string  ?? '',
-    comm:    Number((p as Record<string, unknown>).comm)      || 25,
-    capital: Number((p as Record<string, unknown>).capital)   || 0,
-    address: p.address,
-    type:    (p as Record<string, unknown>).type   as string  ?? '',
-    rooms:   Number((p as Record<string, unknown>).rooms)     || 0,
-    assets:  ((p as Record<string, unknown>).assets as SerializableProperty['assets']) ?? [],
-  }));
+  // Capital base = sum of investor.capital per property.
+  // Used for ROI display in table and detail panel.
+  const rawInvestorCapitals = await prisma.investor.findMany({
+    select: { property_id: true, capital: true },
+  });
+  const investorCapitalMap: Record<string, number> = {};
+  for (const inv of rawInvestorCapitals) {
+    investorCapitalMap[inv.property_id] = (investorCapitalMap[inv.property_id] ?? 0) + Number(inv.capital);
+  }
 
-  // ── Fetch report rows (for per-property period stats) ─────────────────────
+  const properties: SerializableProperty[] = rawProps.map((p) => {
+    const comm       = Number(p.comm)       || 25;
+    const brokerPct  = Number(p.broker_pct) || 0;
+    const brokerPub  = p.broker_public ?? false;
+    return {
+      id:            p.id,
+      name:          p.name,
+      city:          p.city ?? '',
+      state:         p.state ?? '',
+      comm,
+      capital:       investorCapitalMap[p.id] ?? 0,
+      address:       p.address,
+      type:          p.type ?? '',
+      rooms:         Number(p.rooms) || 0,
+      assets:        (p.assets as SerializableProperty['assets']) ?? [],
+      broker_name:   p.broker_name ?? '',
+      broker_pct:    brokerPct,
+      broker_public: brokerPub,
+      effectiveComm: brokerPub ? comm + brokerPct : comm,
+    };
+  });
+
+  // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({
     select: { id: true, property_id: true, month: true, year: true, data: true },
     orderBy: [{ year: 'desc' }, { month: 'desc' }],
@@ -117,6 +117,8 @@ export default async function PropertiesPage() {
       exp:        Number(d.exp         ?? 0),
       opProfit:   Number(d.opProfit    ?? 0),
       commission: Number(d.commission  ?? 0),
+      mgComm:     Number(d.mgComm     ?? d.commission ?? 0),
+      brokerComm: Number(d.brokerComm  ?? 0),
       invProfit:  Number(d.invProfit   ?? 0),
       nights:     Number(d.nights      ?? 0),
       days:       Number(d.days        ?? 0),
@@ -124,8 +126,9 @@ export default async function PropertiesPage() {
       roi:        Number(d.roi         ?? 0),
       adr:        Number(d.adr         ?? 0),
       revpar:     Number(d.revpar      ?? 0),
-      channels:   (d.channels  as Record<string, number>) ?? {},
-      expCats:    (d.expCats   as Record<string, number>) ?? {},
+      channels:    (d.channels  as Record<string, number>) ?? {},
+      expCats:     (d.expCats   as Record<string, number>) ?? {},
+      _hasCapital: Boolean(d._hasCapital),
     }];
   });
 

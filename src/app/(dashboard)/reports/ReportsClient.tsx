@@ -1,44 +1,157 @@
 'use client';
 // src/app/(dashboard)/reports/ReportsClient.tsx
 //
-// Client Component. Three sections, pixel-matched to the HTML:
+// Client Component. Two sections, pixel-matched to the HTML:
 //
 //  1. Collapsible report list (toggleRepList + rndReports)
 //     - Period-filtered, sorted newest-first, paginated (PAGE_SIZE=20)
 //     - Rows: property name + period, KPI meta line, 👁 snapshot + ↓ CSV
-//     - Snapshot opens a DetailPanel with the full calcF() output
+//     - 👁 opens a DetailPanel slide-in with full calcF() output
+//     - ↓ generates a CSV client-side from the report row data (no server call)
 //
 //  2. Generate Reports card grid (6 export-type cards)
-//     - Each calls POST /api/exports — wired in Phase 6 API layer
+//     - Each calls handleExport() client-side using loaded report data
 //
-//  3. Monthly Entry modal (MonthlyEntryModal) triggered from here
-//     and also from the Sidebar's Monthly Entry nav item
+// FIX (Bug 12): propById was () => null — city/property filters broken.
+//               Per-row ↓ now generates CSV client-side immediately.
+//               Empty state has a "Regenerate" button.
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import styles from '@/components/ui/ui.module.css';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import type { RepRow } from '@/lib/period';
 import { Pagination } from '@/components/ui/Pagination';
 import { DetailPanel } from '@/components/ui/DetailPanel';
-import { MonthlyEntryModal } from './MonthlyEntryModal';
+import { useToast } from '@/components/ui/Toast';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — reports only needs id, name, city, comm, effectiveComm
+// ---------------------------------------------------------------------------
+
+export interface ReportsProperty {
+  id:            string;
+  name:          string;
+  city:          string;
+  comm:          number;
+  effectiveComm: number;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAGE_SIZE = 20; // verbatim from HTML
+const PAGE_SIZE = 20;
 
 // ---------------------------------------------------------------------------
-// Formatting helpers
+// Formatting helpers — 2 decimal places throughout
 // ---------------------------------------------------------------------------
 
 function fIN(n: number) {
-  return '₹' + Math.round(n || 0).toLocaleString('en-IN');
+  return '₹' + (Number(n) || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 const MN = ['','January','February','March','April','May','June',
             'July','August','September','October','November','December'];
+
+// ---------------------------------------------------------------------------
+// csvDownload — builds a CSV from one report row and triggers browser download
+// ---------------------------------------------------------------------------
+
+function csvDownload(rep: SerializableReport, propName: string) {
+  const rows = [
+    ['Field', 'Value'],
+    ['Property', propName],
+    ['Period', `${MN[rep.month]} ${rep.year}`],
+    ['Revenue', rep.rev],
+    ['Expenses', rep.exp],
+    ['Operating Profit', rep.opProfit],
+    ['Commission', rep.commission],
+    ['Investor Profit', rep.invProfit],
+    ['Nights', rep.nights],
+    ['Occupancy %', rep.occ],
+    ['ADR', rep.adr ?? 0],
+    ['RevPAR', rep.revpar ?? 0],
+    ['ROI %', rep.roi ?? 0],
+  ];
+
+  // Append expense categories
+  if (rep.expCats && Object.keys(rep.expCats).length) {
+    rows.push(['', '']);
+    rows.push(['Expense Category', 'Amount']);
+    Object.entries(rep.expCats).forEach(([k, v]) => rows.push([k, v]));
+  }
+
+  // Append channels
+  if (rep.channels && Object.keys(rep.channels).length) {
+    rows.push(['', '']);
+    rows.push(['Booking Channel', 'Nights']);
+    Object.entries(rep.channels).forEach(([k, v]) => rows.push([k, v]));
+  }
+
+  const csv = rows
+    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `mg-report-${propName.replace(/\s+/g, '-')}-${rep.year}-${String(rep.month).padStart(2, '0')}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// pdfDownload — delegates to browser-only exportPdf module (no SSR)
+// ---------------------------------------------------------------------------
+
+async function pdfDownload(rep: SerializableReport, propName: string) {
+  const fIN = (n: number) => 'Rs. ' + (n || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+
+  const kpiRows: Array<[string, string]> = [
+    ['Revenue',          fIN(rep.rev)],
+    ['Expenses',         fIN(rep.exp)],
+    ['Operating Profit', fIN(rep.opProfit)],
+    // Show commission breakdown when broker cut is present
+    ...(rep.brokerComm > 0
+      ? [
+          ['MHG Mgmt Commission', fIN(rep.mgComm)] as [string, string],
+          ['Brokerage Commission', fIN(rep.brokerComm)] as [string, string],
+        ]
+      : [['Commission', fIN(rep.commission)] as [string, string]]
+    ),
+    ['Investor Net',     fIN(rep.invProfit)],
+    ['Nights',           String(rep.nights ?? 0)],
+    ['Occupancy',        (rep.occ ?? 0).toFixed(1) + '%'],
+    ['ROI',              rep._hasCapital ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A'],
+    ['ADR',              fIN(rep.adr ?? 0)],
+    ['RevPAR',           fIN(rep.revpar ?? 0)],
+  ];
+
+  // Dynamic import — browser only, never SSR
+  const { exportReportPdf } = await import('@/components/layout/exportPdf');
+  await exportReportPdf({
+    propName,
+    period:   `${MN[rep.month]} ${rep.year}`,
+    kpiRows,
+    expCats:  rep.expCats ?? {},
+    channels: rep.channels ?? {},
+    filename: `mg-report-${propName.replace(/\s+/g, '-')}-${rep.year}-${String(rep.month).padStart(2, '0')}.pdf`,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Export card config — verbatim from the HTML card grid
@@ -50,7 +163,7 @@ const EXPORT_CARDS = [
   { icon: '📈', title: 'Annual Report',   sub: 'Full year summary',                    type: 'annual',   btnClass: 'btn btn-or' },
   { icon: '🏦', title: 'Investor Report', sub: 'ROI & payout breakdown',               type: 'investor', btnClass: 'btn btn-or' },
   { icon: '🏙️', title: 'Consolidated',   sub: 'Multi-property combined',              type: 'monthly',  btnClass: 'btn btn-or' },
-  { icon: '📊', title: 'Raw Data',        sub: 'Full data for spreadsheet',            type: 'raw',      btnClass: 'btn btn-g'  },
+  { icon: '📊', title: 'Raw Data',        sub: 'Full data for spreadsheet',            type: 'raw',      btnClass: 'btn btn-or' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -59,8 +172,8 @@ const EXPORT_CARDS = [
 
 interface ReportsClientProps {
   reports: SerializableReport[];
-  properties: SerializableProperty[];
-  canMonthlyEntry: boolean;
+  properties: ReportsProperty[];
+  canDelete: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,16 +183,23 @@ interface ReportsClientProps {
 export function ReportsClient({
   reports,
   properties,
-  canMonthlyEntry,
+  canDelete,
 }: ReportsClientProps) {
-  const { getFilteredReps } = usePeriod();
+  const router = useRouter();
+  const { toast } = useToast();
+  const [, startTransition] = useTransition();
+
+  const { getFilteredReps, ...periodState } = usePeriod();
+  const filters = usePageFilters({ city: true, property: true });
 
   // ── Local state ───────────────────────────────────────────────────────────
-  const [listOpen, setListOpen]         = useState(false);
+  const [listOpen, setListOpen]         = useState(true);
   const [page, setPage]                 = useState(1);
   const [snapshotOpen, setSnapshotOpen] = useState(false);
   const [snapshotRep, setSnapshotRep]   = useState<SerializableReport | null>(null);
-  const [monthlyOpen, setMonthlyOpen]   = useState(false);
+  const [isRegen, setIsRegen]           = useState(false);
+  const [deleteRep, setDeleteRep]       = useState<SerializableReport | null>(null);
+  const [isDeleting, setIsDeleting]     = useState(false);
 
   // ── Property lookup ───────────────────────────────────────────────────────
   const propMap = useMemo(
@@ -87,13 +207,35 @@ export function ReportsClient({
     [properties],
   );
 
+  const propById = useMemo(
+    () => (pid: string) => propMap[pid]
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+      : null,
+    [propMap],
+  );
+
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: 'all' }),
+    [filters.city, filters.property],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
+
   // ── Period-filtered + sorted reports ─────────────────────────────────────
   const filteredReps = useMemo(
-    // SerializableReport is structurally compatible with RepRow (same fields,
-    // minus the optional _autoGen flag). Cast is safe.
-    () => getFilteredReps(reports as RepRow[], () => null),
+    () => getFilteredReps(reports as RepRow[], propById, pageFilterState) as SerializableReport[],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [reports],
+    [reports, propById, pageFilterState,
+     periodState.cPType, periodState.cM, periodState.cY,
+     periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
+     periodState.cDay, periodState.cWeek],
   );
 
   const sortedReps = useMemo(
@@ -105,51 +247,217 @@ export function ReportsClient({
   const safePage   = Math.min(page, totalPages);
   const paginated  = sortedReps.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
-  // ── Toggle list — verbatim toggleRepList() ────────────────────────────────
+  // Reset to page 1 whenever filtered results change
+  useEffect(() => { setPage(1); }, [sortedReps.length]);
+
+  // ── Toggle list ───────────────────────────────────────────────────────────
   function handleToggleList() {
     if (!listOpen) setPage(1);
     setListOpen((v) => !v);
   }
 
-  // ── Export — calls /api/exports (Phase 6) ─────────────────────────────────
-  async function handleExport(type: string) {
+  // ── Regenerate reports ────────────────────────────────────────────────────
+  async function handleRegen() {
+    setIsRegen(true);
     try {
-      const res = await fetch('/api/exports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
-      });
+      const res = await fetch('/api/regen-reports', { method: 'POST' });
       if (!res.ok) {
-        alert('Export failed — API not yet wired (Phase 6)');
+        const err = await res.json().catch(() => ({}));
+        toast(err.error ?? 'Regeneration failed', 'er');
         return;
       }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `mg-${type}-export.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const data = await res.json().catch(() => ({}));
+      toast(`✓ ${data.count ?? 'Reports'} regenerated successfully`, 'ok');
+      startTransition(() => router.refresh());
     } catch {
-      alert('Export API not yet available — wired in Phase 6.');
+      toast('Network error — please try again', 'er');
+    } finally {
+      setIsRegen(false);
     }
+  }
+
+  async function handleDeleteReport() {
+    if (!deleteRep) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch('/api/reports', {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ id: deleteRep.id }),
+      });
+      const data = await res.json().catch(() => ({})) as { success?: boolean; error?: string; deleted?: { report: number; bookings: number; expenses: number; payouts: number } };
+      if (!res.ok) {
+        toast(data.error ?? 'Failed to delete report', 'er');
+        return;
+      }
+      const d = data.deleted;
+      const summary = d
+        ? `report + ${d.bookings} booking${d.bookings !== 1 ? 's' : ''} + ${d.expenses} expense${d.expenses !== 1 ? 's' : ''} + ${d.payouts} payout${d.payouts !== 1 ? 's' : ''}`
+        : 'report';
+      toast(`✓ Deleted: ${summary} — ${propMap[deleteRep.pid]?.name ?? ''} ${MN[deleteRep.month]} ${deleteRep.year}`, 'ok');
+      setDeleteRep(null);
+      startTransition(() => router.refresh());
+    } catch {
+      toast('Network error — please try again', 'er');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  // ── Export cards — build clean CSV from client-side report data ──────────
+  function handleExport(type: string) {
+    // All cards use sortedReps (period-filtered) except 'raw' which uses all
+    const source = type === 'raw' ? [...reports].sort(
+      (a, b) => b.year * 100 + b.month - (a.year * 100 + a.month)
+    ) : sortedReps;
+
+    const fR = (n: number) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const baseRow = (r: SerializableReport) => ({
+      Property:    propMap[r.pid]?.name ?? r.pid,
+      City:        propMap[r.pid]?.city ?? '',
+      Period:      `${MN[r.month]} ${r.year}`,
+      Revenue:     fR(r.rev),
+      Expenses:    fR(r.exp),
+      'Op. Profit':fR(r.opProfit),
+      Commission:  fR(r.commission),
+      'Inv. Net':  fR(r.invProfit),
+      Nights:      String(r.nights ?? 0),
+      'Occ%':      (r.occ ?? 0).toFixed(1) + '%',
+      ROI:         r._hasCapital ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
+      ADR:         fR(r.adr ?? 0),
+      RevPAR:      fR(r.revpar ?? 0),
+    });
+
+    let headers: string[];
+    let rows: string[][];
+    let filename: string;
+    const date = new Date().toISOString().slice(0, 10);
+
+    if (type === 'monthly') {
+      // Group by period — one section per month, all properties
+      headers = ['Property', 'City', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Nights', 'Occ%', 'ROI'];
+      rows = source.map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, row.Period, row.Revenue, row.Expenses, row['Op. Profit'], row.Commission, row['Inv. Net'], row.Nights, row['Occ%'], row.ROI];
+      });
+      filename = `mg-monthly-report-${date}.csv`;
+
+    } else if (type === 'property') {
+      // One row per report, sorted by property then period
+      headers = ['Property', 'City', 'Comm%', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Nights', 'Occ%', 'ROI', 'ADR', 'RevPAR'];
+      rows = [...source].sort((a, b) => {
+        const pa = propMap[a.pid]?.name ?? ''; const pb = propMap[b.pid]?.name ?? '';
+        return pa.localeCompare(pb) || (b.year * 100 + b.month) - (a.year * 100 + a.month);
+      }).map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, String(propMap[r.pid]?.effectiveComm ?? '') + '%', row.Period, row.Revenue, row.Expenses, row['Op. Profit'], row.Commission, row['Inv. Net'], row.Nights, row['Occ%'], row.ROI, row.ADR, row.RevPAR];
+      });
+      filename = `mg-property-report-${date}.csv`;
+
+    } else if (type === 'annual') {
+      // Aggregate by property × year
+      const aggMap: Record<string, { rev: number; exp: number; opProfit: number; commission: number; invProfit: number; nights: number; name: string; city: string }> = {};
+      source.forEach((r) => {
+        const key = `${r.pid}__${r.year}`;
+        if (!aggMap[key]) aggMap[key] = { rev: 0, exp: 0, opProfit: 0, commission: 0, invProfit: 0, nights: 0, name: propMap[r.pid]?.name ?? r.pid, city: propMap[r.pid]?.city ?? '' };
+        aggMap[key].rev += r.rev; aggMap[key].exp += r.exp;
+        aggMap[key].opProfit += r.opProfit; aggMap[key].commission += r.commission;
+        aggMap[key].invProfit += r.invProfit; aggMap[key].nights += (r.nights ?? 0);
+      });
+      headers = ['Property', 'City', 'Year', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Total Nights'];
+      rows = Object.entries(aggMap).sort(([a], [b]) => b.localeCompare(a)).map(([key, v]) => {
+        const year = key.split('__')[1];
+        return [v.name, v.city, year, fR(v.rev), fR(v.exp), fR(v.opProfit), fR(v.commission), fR(v.invProfit), String(v.nights)];
+      });
+      filename = `mg-annual-report-${date}.csv`;
+
+    } else if (type === 'investor') {
+      // One row per report with investor net & ROI
+      headers = ['Property', 'City', 'Period', 'Revenue', 'Op. Profit', 'Commission', 'Investor Net', 'ROI'];
+      rows = source.map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, row.Period, row.Revenue, row['Op. Profit'], row.Commission, row['Inv. Net'], row.ROI];
+      });
+      filename = `mg-investor-report-${date}.csv`;
+
+    } else {
+      // raw — all fields
+      headers = ['Property', 'City', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Nights', 'Occ%', 'ROI', 'ADR', 'RevPAR'];
+      rows = source.map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, row.Period, row.Revenue, row.Expenses, row['Op. Profit'], row.Commission, row['Inv. Net'], row.Nights, row['Occ%'], row.ROI, row.ADR, row.RevPAR];
+      });
+      filename = `mg-raw-export-${date}.csv`;
+    }
+
+    downloadCsv(headers, rows, filename);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
+      <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
       {/* ══ Section 1: Collapsible Report List ════════════════════════════ */}
       <div
         className="stl"
-        style={{ cursor: 'pointer', userSelect: 'none' }}
-        onClick={handleToggleList}
+        style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <div className="d" />
-        <span style={{ marginRight: '4px' }}>{listOpen ? '▼' : '▶'}</span>
-        Auto-Generated Reports{' '}
-        <span style={{ fontSize: '10px', color: 'var(--t3)', fontWeight: 400 }}>
-          ({filteredReps.length} for current period)
+        <span onClick={handleToggleList} style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+          <div className="d" />
+          <span>{listOpen ? '▼' : '▶'}</span>
+          Auto-Generated Reports{' '}
+          <span style={{ fontSize: '10px', color: 'var(--t3)', fontWeight: 400 }}>
+            ({filteredReps.length} for current period)
+          </span>
         </span>
+        <button
+          className="btn btn-g btn-sm"
+          style={{ fontSize: '11px' }}
+          onClick={handleRegen}
+          disabled={isRegen}
+        >
+          {isRegen ? '…' : '↻ Regenerate'}
+        </button>
+        <button className="btn btn-g btn-sm" style={{ fontSize: '11px' }} onClick={() => {
+          downloadCsv(
+            ['Property', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Investor Net', 'Nights', 'Occupancy', 'ROI', 'ADR', 'RevPAR'],
+            sortedReps.map((r) => {
+              const propName = propMap[r.pid]?.name ?? r.pid;
+              return [
+                propName, `${MN[r.month]} ${r.year}`,
+                String(r.rev), String(r.exp), String(r.opProfit),
+                String(r.commission), String(r.invProfit),
+                String(r.nights ?? 0),
+                `${(r.occ ?? 0).toFixed(1)}%`,
+                r._hasCapital ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
+                String(r.adr ?? 0), String(r.revpar ?? 0),
+              ];
+            }),
+            `mg-reports-${new Date().toISOString().slice(0, 10)}.csv`,
+          );
+        }}>↓ CSV</button>
+        <button className="btn btn-g btn-sm" style={{ fontSize: '11px' }} onClick={async () => {
+          const { exportTablePdf } = await import('@/components/layout/exportPdf');
+          await exportTablePdf({
+            title: 'Auto-Generated Reports',
+            headers: ['Property', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Occ%', 'ROI'],
+            rows: sortedReps.map((r) => {
+              const propName = propMap[r.pid]?.name ?? r.pid;
+              return [
+                propName, `${MN[r.month]} ${r.year}`,
+                'Rs. ' + r.rev.toLocaleString('en-IN'),
+                'Rs. ' + r.exp.toLocaleString('en-IN'),
+                'Rs. ' + r.opProfit.toLocaleString('en-IN'),
+                'Rs. ' + r.commission.toLocaleString('en-IN'),
+                'Rs. ' + r.invProfit.toLocaleString('en-IN'),
+                `${(r.occ ?? 0).toFixed(1)}%`,
+                r._hasCapital ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
+              ];
+            }),
+            filename: `mg-reports-${new Date().toISOString().slice(0, 10)}.pdf`,
+          });
+        }}>↓ PDF</button>
       </div>
 
       {listOpen && (
@@ -163,40 +471,72 @@ export function ReportsClient({
               <div className="es-ico">📄</div>
               <div className="es-t">No Reports for This Period</div>
               <div className="es-s">
-                Change the period filter or add bookings/expenses.
+                {reports.length === 0
+                  ? 'No reports exist yet. Add bookings via Monthly Entry, then click Regenerate.'
+                  : 'Change the period filter or click Regenerate to rebuild reports.'}
               </div>
+              <button
+                className="btn btn-or btn-sm"
+                onClick={handleRegen}
+                disabled={isRegen}
+                style={{ marginTop: '12px' }}
+              >
+                {isRegen ? 'Regenerating…' : '↻ Regenerate Reports'}
+              </button>
             </div>
           ) : (
             <>
-              {/* Report rows — verbatim from rndReports() */}
+              {/* Report rows */}
               {paginated.map((r) => {
                 const prop = propMap[r.pid];
+                const propName = prop?.name ?? 'Unknown';
                 return (
                   <div key={r.id} className="rrow">
                     <div className="rico">📄</div>
                     <div className="rinfo">
                       <div className="rname">
-                        {prop?.name ?? 'Unknown'} — {MN[r.month]} {r.year}
+                        {propName} — {MN[r.month]} {r.year}
                       </div>
                       <div className="rmeta">
-                        Rev: {fIN(r.rev)} · Exp: {fIN(r.exp)} · Profit: {fIN(r.opProfit)} · Occ: {r.occ ?? 0}% · ROI: {r.roi ?? 0}%
+                        Rev: {fIN(r.rev)} · Exp: {fIN(r.exp)} · Profit: {fIN(r.opProfit)} · Occ: {(r.occ ?? 0).toFixed(1)}% · ROI: {r._hasCapital ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A'}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+                      {/* View — opens slide-in DetailPanel */}
                       <button
                         className="btn btn-g btn-sm"
                         title="View snapshot"
                         onClick={() => { setSnapshotRep(r); setSnapshotOpen(true); }}
                       >
-                        👁
+                        👁 View
                       </button>
+                      {/* Download CSV — client-side, no server call */}
                       <button
                         className="btn btn-g btn-sm"
-                        title="Export CSV"
-                        onClick={() => handleExport('property')}
+                        title="Download CSV"
+                        onClick={() => csvDownload(r, propName)}
                       >
-                        ↓
+                        ↓ CSV
                       </button>
+                      {/* Download PDF — branded, client-side */}
+                      <button
+                        className="btn btn-g btn-sm"
+                        title="Download PDF"
+                        onClick={() => pdfDownload(r, propName)}
+                      >
+                        ↓ PDF
+                      </button>
+                      {/* Delete — SuperAdmin only */}
+                      {canDelete && (
+                        <button
+                          className="btn btn-rd btn-sm"
+                          title="Delete this report"
+                          onClick={() => setDeleteRep(r)}
+                          style={{ marginLeft: '2px' }}
+                        >
+                          🗑
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -218,7 +558,7 @@ export function ReportsClient({
       {/* ══ Section 2: Generate Reports ═══════════════════════════════════ */}
       <div className="stl"><div className="d" />Generate Reports</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '11px' }}>
+      <div className="rg3" style={{ marginBottom: '16px' }}>
         {EXPORT_CARDS.map((card) => (
           <div key={card.title} className="cc" style={{ textAlign: 'center', padding: '22px 16px' }}>
             <div style={{ fontSize: '28px', marginBottom: '8px' }}>{card.icon}</div>
@@ -228,39 +568,47 @@ export function ReportsClient({
             <div style={{ fontSize: '11px', color: 'var(--t3)', marginBottom: '14px' }}>
               {card.sub}
             </div>
-            <button
-              className={card.btnClass}
-              style={{ width: '100%' }}
-              onClick={() => handleExport(card.type)}
-            >
-              Select &amp; Export
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                className={card.btnClass}
+                style={{ flex: 1 }}
+                onClick={() => handleExport(card.type)}
+              >
+                ↓ CSV
+              </button>
+              <button
+                className="btn btn-g"
+                style={{ flex: 1 }}
+                onClick={async () => {
+                  const source = card.type === 'raw'
+                    ? [...reports].sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month))
+                    : sortedReps;
+                  const { exportTablePdf } = await import('@/components/layout/exportPdf');
+                  await exportTablePdf({
+                    title: card.title,
+                    headers: ['Property', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Inv. Net', 'Occ%', 'ROI'],
+                    rows: source.map((r) => [
+                      propMap[r.pid]?.name ?? '—',
+                      `${MN[r.month]} ${r.year}`,
+                      'Rs. ' + r.rev.toLocaleString('en-IN'),
+                      'Rs. ' + r.exp.toLocaleString('en-IN'),
+                      'Rs. ' + r.opProfit.toLocaleString('en-IN'),
+                      'Rs. ' + r.invProfit.toLocaleString('en-IN'),
+                      (r.occ ?? 0).toFixed(1) + '%',
+                      r._hasCapital ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
+                    ]),
+                    filename: `mg-${card.type}-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+                  });
+                }}
+              >
+                ↓ PDF
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* ══ Monthly Entry Modal ════════════════════════════════════════════ */}
-      {canMonthlyEntry && (
-        <>
-          {/*
-           * Hidden trigger button — the Sidebar's Monthly Entry nav item
-           * dispatches a CustomEvent('openMonthlyEntry') on click (wired
-           * in Run 17). This listener catches it and opens the modal.
-           * Alternatively, the button can be programmatically clicked.
-           */}
-          <MonthlyEntryModalTrigger
-            open={monthlyOpen}
-            onOpen={() => setMonthlyOpen(true)}
-          />
-          <MonthlyEntryModal
-            isOpen={monthlyOpen}
-            onClose={() => setMonthlyOpen(false)}
-            properties={properties}
-          />
-        </>
-      )}
-
-      {/* ══ Report Snapshot Detail Panel ═══════════════════════════════════ */}
+      {/* ══ Report Snapshot Detail Panel — slide in from right ═════════════ */}
       <DetailPanel
         isOpen={snapshotOpen}
         onClose={() => setSnapshotOpen(false)}
@@ -275,33 +623,72 @@ export function ReportsClient({
           <ReportSnapshot rep={snapshotRep} propMap={propMap} />
         )}
       </DetailPanel>
+
+      {/* ══ Delete Report Confirm Modal ══════════════════════════════════════ */}
+      {canDelete && (
+        <div
+          className={`${styles.ov}${deleteRep ? ' ' + styles.open : ''}`}
+          onClick={() => !isDeleting && setDeleteRep(null)}
+        >
+          <div
+            className={styles.modal}
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '420px' }}
+          >
+            <button className={styles['mc-x']} onClick={() => setDeleteRep(null)} disabled={isDeleting}>✕</button>
+            <div className={styles.mt} style={{ color: 'var(--rd)' }}>Delete Report</div>
+            <div className={styles.ms}>This action cannot be undone.</div>
+
+            {deleteRep && (
+              <>
+                <div style={{
+                  background: 'var(--rdp)', border: '1px solid var(--rd)',
+                  borderRadius: '8px', padding: '12px 14px', marginBottom: '16px',
+                  fontSize: '13px', color: 'var(--rd)',
+                }}>
+                  <strong>{propMap[deleteRep.pid]?.name ?? 'Unknown'}</strong>
+                  {' — '}{MN[deleteRep.month]} {deleteRep.year}
+                  <div style={{ fontSize: '11.5px', color: 'var(--t2)', marginTop: '4px' }}>
+                    Rev: {fIN(deleteRep.rev)} · Profit: {fIN(deleteRep.opProfit)} · Occ: {(deleteRep.occ ?? 0).toFixed(1)}%
+                  </div>
+                </div>
+                <p style={{ fontSize: '12.5px', color: 'var(--t2)', marginBottom: '16px', lineHeight: 1.5 }}>
+                  This will permanently delete:
+                </p>
+                <div style={{ background: 'var(--bg2)', borderRadius: '7px', padding: '10px 14px', marginBottom: '16px', fontSize: '12.5px', lineHeight: 1.7 }}>
+                  <div>🗑 The report summary</div>
+                  <div>🗑 All bookings for this property in this month</div>
+                  <div>🗑 All daily expenses for this property in this month</div>
+                  <div>🗑 All payout ledger entries for this property in this month</div>
+                </div>
+                <p style={{ fontSize: '12px', color: 'var(--rd)', marginBottom: '4px', fontWeight: 600 }}>
+                  This cannot be undone.
+                </p>
+              </>
+            )}
+
+            <div className={styles.mf}>
+              <button
+                className={`${styles.mb} ${styles.can}`}
+                onClick={() => setDeleteRep(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                className={styles.mb}
+                style={{ background: 'var(--rd)', color: '#fff' }}
+                onClick={handleDeleteReport}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting…' : 'Delete Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
-}
-
-// ---------------------------------------------------------------------------
-// MonthlyEntryModalTrigger — registers the CustomEvent listener so the
-// Sidebar nav item can open the modal without a prop-drilling chain.
-// ---------------------------------------------------------------------------
-
-function MonthlyEntryModalTrigger({
-  open,
-  onOpen,
-}: {
-  open: boolean;
-  onOpen: () => void;
-}) {
-  // Register the listener once on mount
-  if (typeof window !== 'undefined') {
-    window.__openMonthlyEntry = onOpen;
-  }
-  return null;
-}
-
-declare global {
-  interface Window {
-    __openMonthlyEntry?: () => void;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -313,26 +700,40 @@ function ReportSnapshot({
   propMap,
 }: {
   rep: SerializableReport;
-  propMap: Record<string, SerializableProperty>;
+  propMap: Record<string, ReportsProperty>;
 }) {
   const prop = propMap[rep.pid];
 
+  const hasBroker = (rep.brokerComm ?? 0) > 0;
+  const mgCommPct     = prop?.comm          ?? 0;
+  const brokerCommPct = (prop?.effectiveComm ?? 0) - mgCommPct;
+
   const KPI_ROWS = [
-    { l: 'Revenue',                        v: fIN(rep.rev),          c: 'var(--tx)' },
-    { l: 'Expenses',                       v: fIN(rep.exp),          c: 'var(--rd)' },
-    { l: 'Op. Profit',                     v: fIN(rep.opProfit),     c: 'var(--gr)' },
-    { l: `Commission (${prop?.comm ?? 25}%)`, v: fIN(rep.commission), c: 'var(--or)' },
-    { l: 'Investor Net',                   v: fIN(rep.invProfit),    c: 'var(--bl)' },
-    { l: 'Occupancy',                      v: (rep.occ ?? 0) + '%', c: 'var(--go)' },
-    { l: 'ROI',                            v: (rep.roi ?? 0) + '%', c: 'var(--or)' },
-    { l: 'ADR',                            v: fIN(rep.adr ?? 0),    c: 'var(--tx)' },
-    { l: 'RevPAR',                         v: fIN(rep.revpar ?? 0), c: 'var(--gr)' },
+    { l: 'Revenue',    v: fIN(rep.rev),      c: 'var(--tx)' },
+    { l: 'Expenses',   v: fIN(rep.exp),      c: 'var(--rd)' },
+    { l: 'Op. Profit', v: fIN(rep.opProfit), c: 'var(--gr)' },
+    // Commission breakdown — split when a public broker cut exists
+    ...(hasBroker
+      ? [
+          { l: `MHG Mgmt (${mgCommPct}%)`,      v: fIN(rep.mgComm),     c: 'var(--or)' },
+          { l: `Brokerage (${brokerCommPct}%)`,  v: fIN(rep.brokerComm), c: 'var(--go)' },
+        ]
+      : [
+          { l: `Commission (${prop?.effectiveComm ?? 25}%)`, v: fIN(rep.commission), c: 'var(--or)' },
+        ]
+    ),
+    { l: 'Investor Net', v: fIN(rep.invProfit),                                              c: 'var(--bl)' },
+    { l: 'Nights',       v: String(rep.nights ?? 0),                                         c: 'var(--tx)' },
+    { l: 'Occupancy',    v: (rep.occ ?? 0).toFixed(1) + '%',                                 c: 'var(--go)' },
+    { l: 'ROI',          v: rep._hasCapital ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',       c: 'var(--or)' },
+    { l: 'ADR',          v: fIN(rep.adr ?? 0),                                               c: 'var(--tx)' },
+    { l: 'RevPAR',       v: fIN(rep.revpar ?? 0),                                            c: 'var(--gr)' },
   ];
 
   return (
     <>
       {/* Period header */}
-      <div style={{ fontSize: '10.5px', fontWeight: 600, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: '12px' }}>
+      <div className="dp-sl" style={{ marginBottom: '12px' }}>
         {prop?.name ?? 'Unknown'} — {MN[rep.month]} {rep.year}
       </div>
 

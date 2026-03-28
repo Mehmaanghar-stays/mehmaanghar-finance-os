@@ -21,7 +21,7 @@
 // After a successful modal save the page is revalidated via router.refresh().
 
 import { useState, useCallback } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { PropModal } from '@/app/(dashboard)/properties/PropModal';
 import { InvModal } from '@/app/(dashboard)/investors/InvModal';
@@ -31,26 +31,24 @@ import type { SerializableProperty } from '@/app/(dashboard)/properties/page';
 import styles from './Topbar.module.css';
 
 // ---------------------------------------------------------------------------
-// Route segment → export model map (for "Export CSV" button)
+// Route segment → export model map (for "Export CSV / PDF" buttons)
 // ---------------------------------------------------------------------------
 
-const PATH_TO_MODEL: Record<string, string> = {
-  '/bookings':   'bookings',
-  '/dailyexp':   'daily-expenses',
-  '/expenses':   'expenses',
-  '/payouts':    'payouts',
-  '/crm':        'guests',
-  '/investors':  'payouts',  // investors page → export payouts for context
-  '/properties': 'bookings', // properties page → export bookings
-};
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+interface TopbarActionsProps {
+  role: string;
+}
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function TopbarActions() {
+export function TopbarActions({ role }: TopbarActionsProps) {
+  const isSuperAdmin = role === 'SuperAdmin';
   const router   = useRouter();
-  const pathname = usePathname();
   const { toast } = useToast();
 
   // ── Modal state ───────────────────────────────────────────────────────────
@@ -145,35 +143,6 @@ export function TopbarActions() {
     }
   }
 
-  // ── Export CSV ────────────────────────────────────────────────────────────
-  async function handleExportCsv() {
-    // Resolve the export model from the current route segment
-    const segment = '/' + (pathname.split('/')[1] ?? '');
-    const model   = PATH_TO_MODEL[segment];
-
-    if (!model) {
-      toast('CSV export is not available for this page.', 'in');
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/exports?model=${model}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({})) as { error?: string };
-        toast(err.error ?? 'Export failed', 'er');
-        return;
-      }
-      const blob     = await res.blob();
-      const url      = URL.createObjectURL(blob);
-      const a        = document.createElement('a');
-      a.href         = url;
-      a.download     = `mg-${model}-export.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast('Export failed — please try again', 'er');
-    }
-  }
 
   // ── Backup ────────────────────────────────────────────────────────────────
   async function handleBackup() {
@@ -252,60 +221,70 @@ export function TopbarActions() {
     return [styles.btn, ...variants.map((v) => styles[v])].join(' ');
   }
 
+  // ── Mobile overflow menu ──────────────────────────────────────────────────
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // ── Render ────────────────────────────────────────────────────────────────
+  // All topbar action buttons (+ Property, + Investor, Backup, Restore,
+  // Export CSV) are SuperAdmin-only. Non-SuperAdmin users see only their
+  // username in the topbar.
+  if (!isSuperAdmin) return null;
+
   return (
     <>
-      {/* + Property */}
-      <button
-        type="button"
-        className={btnClass('btn-g', 'btn-sm')}
-        onClick={handleOpenPropModal}
-      >
-        + Property
-      </button>
+      {/* ── Desktop: full buttons (hidden on mobile via CSS) ──────────── */}
+      <div className={styles['tb-actions-desktop']}>
+        <button type="button" className={btnClass('btn-g', 'btn-sm')} onClick={handleOpenPropModal}>
+          + Property
+        </button>
+        <button type="button" className={btnClass('btn-g', 'btn-sm')} onClick={handleOpenInvModal}>
+          + Investor
+        </button>
+        <button type="button" className={btnClass('btn-g', 'btn-sm')} title="Download full backup as JSON" onClick={handleBackup}>
+          💾 Backup
+        </button>
+        <label className={btnClass('btn-g', 'btn-sm')} style={{ cursor: 'pointer' }} title="Restore from JSON backup">
+          📂 Restore
+          <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleRestore} />
+        </label>
+      </div>
 
-      {/* + Investor */}
-      <button
-        type="button"
-        className={btnClass('btn-g', 'btn-sm')}
-        onClick={handleOpenInvModal}
-      >
-        + Investor
-      </button>
-
-      {/* 💾 Backup */}
-      <button
-        type="button"
-        className={btnClass('btn-g', 'btn-sm')}
-        title="Download full backup as JSON"
-        onClick={handleBackup}
-      >
-        💾 Backup
-      </button>
-
-      {/* 📂 Restore */}
-      <label
-        className={btnClass('btn-g', 'btn-sm')}
-        style={{ cursor: 'pointer' }}
-        title="Restore from JSON backup"
-      >
-        📂 Restore
-        <input
-          type="file"
-          accept=".json"
-          style={{ display: 'none' }}
-          onChange={handleRestore}
-        />
-      </label>
-
-      {/* ↓ Export CSV */}
-      <button
-        type="button"
-        className={btnClass('btn-or', 'btn-sm')}
-        onClick={handleExportCsv}
-      >
-        ↓ Export CSV
-      </button>
+      {/* ── Mobile: overflow dropdown (hidden on desktop via CSS) ──────── */}
+      <div className={styles['tb-actions-mobile']}>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            className={btnClass('btn-g', 'btn-sm')}
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="More actions"
+          >
+            ⋮
+          </button>
+          {menuOpen && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 59 }}
+                onClick={() => setMenuOpen(false)}
+              />
+              <div className={styles['tb-dropdown']}>
+                <button type="button" onClick={() => { handleOpenPropModal(); setMenuOpen(false); }}>
+                  🏠 Property
+                </button>
+                <button type="button" onClick={() => { handleOpenInvModal(); setMenuOpen(false); }}>
+                  👤 Investor
+                </button>
+                <button type="button" onClick={() => { handleBackup(); setMenuOpen(false); }}>
+                  💾 Backup
+                </button>
+                <label style={{ cursor: 'pointer' }}>
+                  📂 Restore
+                  <input type="file" accept=".json" style={{ display: 'none' }} onChange={(e) => { handleRestore(e); setMenuOpen(false); }} />
+                </label>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* PropModal — add mode only from Topbar */}
       <PropModal
@@ -313,7 +292,6 @@ export function TopbarActions() {
         onClose={() => setPropModalOpen(false)}
         editId={null}
         initialValues={undefined}
-        knownCities={[]}
         onSave={handleSaveProperty}
         isSaving={isSavingProp}
       />

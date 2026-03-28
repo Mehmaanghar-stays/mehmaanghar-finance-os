@@ -1,10 +1,8 @@
 // src/app/(dashboard)/reports/page.tsx
 //
 // Reports page — Server Component shell.
-// Fetches Report rows + Property rows; passes them to <ReportsClient />.
-//
-// HTML source: <div class="page" id="page-reports"> + rndReports()
-//              + saveMonthlyBulk() + initMmModal()
+// Fetches Report rows + Property rows (id, name, city, comm, effectiveComm).
+// effectiveComm used in snapshot panel commission label.
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -12,24 +10,19 @@ import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getRolePermissions } from '@/lib/permissions';
 import { ReportsClient } from './ReportsClient';
+import type { ReportsProperty } from './ReportsClient';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
 
 export default async function ReportsPage() {
-  // ── Session + permissions ─────────────────────────────────────────────────
-  const cookieName = process.env.COOKIE_NAME ?? 'mg_session';
+  const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
   const cookieStore = await cookies();
-  const token = cookieStore.get(cookieName)?.value ?? '';
-  const session = token ? await verifyToken(token) : null;
+  const token       = cookieStore.get(cookieName)?.value ?? '';
+  const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
   const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
+  const tabPerms  = rolePerms?.tabPermissions ?? {};
   if (tabPerms['reports'] !== true) redirect('/dashboard');
-
-  // 'Monthly Entry' nav item (Sidebar) is gated on reports create permission
-  const canMonthlyEntry = crudPerms['reports']?.create === true;
 
   // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({
@@ -50,6 +43,8 @@ export default async function ReportsPage() {
       exp:        Number(d.exp        ?? 0),
       opProfit:   Number(d.opProfit   ?? 0),
       commission: Number(d.commission ?? 0),
+      mgComm:     Number(d.mgComm     ?? d.commission ?? 0),
+      brokerComm: Number(d.brokerComm  ?? 0),
       invProfit:  Number(d.invProfit  ?? 0),
       nights:     Number(d.nights     ?? 0),
       days:       Number(d.days       ?? 0),
@@ -57,35 +52,30 @@ export default async function ReportsPage() {
       roi:        Number(d.roi        ?? 0),
       adr:        Number(d.adr        ?? 0),
       revpar:     Number(d.revpar     ?? 0),
-      channels:   (d.channels as Record<string, number>) ?? {},
-      expCats:    (d.expCats  as Record<string, number>) ?? {},
+      channels:    (d.channels as Record<string, number>) ?? {},
+      expCats:     (d.expCats  as Record<string, number>) ?? {},
+      _hasCapital: Boolean(d._hasCapital),
     }];
   });
 
-  // ── Fetch properties (for Monthly Entry modal + snapshot display) ──────────
+  // ── Fetch properties — id, name, city, comm + broker for effectiveComm ────
   const rawProps = await prisma.property.findMany({
-    select: { id: true, name: true, address: true },
+    select: { id: true, name: true, city: true, comm: true, broker_pct: true, broker_public: true },
     orderBy: { name: 'asc' },
   });
 
-  const properties: SerializableProperty[] = rawProps.map((p) => ({
-    id:      p.id,
-    name:    p.name,
-    city:    (p as Record<string, unknown>).city   as string ?? '',
-    state:   (p as Record<string, unknown>).state  as string ?? '',
-    comm:    Number((p as Record<string, unknown>).comm)     || 25,
-    capital: Number((p as Record<string, unknown>).capital)  || 0,
-    address: p.address,
-    type:    (p as Record<string, unknown>).type   as string ?? '',
-    rooms:   Number((p as Record<string, unknown>).rooms)    || 0,
-    assets:  ((p as Record<string, unknown>).assets as SerializableProperty['assets']) ?? [],
-  }));
+  const properties: ReportsProperty[] = rawProps.map((p) => {
+    const comm      = Number(p.comm)       || 25;
+    const brokerPct = Number(p.broker_pct) || 0;
+    const brokerPub = p.broker_public ?? false;
+    return {
+      id:            p.id,
+      name:          p.name,
+      city:          p.city ?? '',
+      comm,
+      effectiveComm: brokerPub ? comm + brokerPct : comm,
+    };
+  });
 
-  return (
-    <ReportsClient
-      reports={reports}
-      properties={properties}
-      canMonthlyEntry={canMonthlyEntry}
-    />
-  );
+  return <ReportsClient reports={reports} properties={properties} canDelete={session.role === 'SuperAdmin'} />;
 }

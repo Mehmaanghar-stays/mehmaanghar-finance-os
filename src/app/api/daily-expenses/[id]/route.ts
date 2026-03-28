@@ -16,6 +16,7 @@ import {
 } from "@/lib/permissions";
 import { deleteFile } from "@/lib/storage";
 import { Prisma } from "@/generated/prisma/client/client";
+import { regenReports } from "@/lib/regenReports";
 
 const STORAGE_BUCKET = "mg-finance-os";
 
@@ -102,6 +103,11 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // Normalise camelCase keys from DailyExpModal → snake_case
+  if (body.expenseDate  !== undefined && body.expense_date  === undefined) body.expense_date  = body.expenseDate;
+  if (body.propertyId   !== undefined && body.property_id   === undefined) body.property_id   = body.propertyId;
+  if (body.invoicePath  !== undefined && body.invoice_path  === undefined) body.invoice_path  = body.invoicePath;
+
   const updateData: Prisma.DailyExpenseUpdateInput = {};
   if (typeof body.expense_date === "string")
     updateData.expense_date = new Date(body.expense_date);
@@ -124,6 +130,7 @@ export async function PATCH(
       where: { id },
       data: updateData,
     });
+    await regenReports();
     return NextResponse.json({ data: serializeDailyExpense(expense) });
   } catch (err) {
     return handleError(err);
@@ -175,6 +182,7 @@ export async function DELETE(
     }
 
     await prisma.dailyExpense.delete({ where: { id } });
+    await regenReports();
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleError(err);

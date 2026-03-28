@@ -15,8 +15,7 @@
 //   No UtilsEntry model exists in the schema. Entries are stored as a JSON
 //   array in UtilsSetting under key='utils_entries'. The page fetches this
 //   via the server shell and passes it as a prop. Mutations call
-//   POST/PATCH/DELETE /api/utils (Phase 6 API). Until Phase 6 is live, the
-//   modal save shows a toast indicating the API is not yet wired.
+//   POST/PATCH/DELETE /api/utils — fully wired.
 //   The evaluation migration plan documents the UtilsEntry model to add.
 //
 // Source: <div class="page" id="page-utils"> + rndUtils(), saveUtil(),
@@ -27,7 +26,16 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { UtilModal } from './UtilModal';
 import type { UtilFormValues } from './UtilModal';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — utils only needs id, name, city
+// ---------------------------------------------------------------------------
+
+export interface UtilsProperty {
+  id:   string;
+  name: string;
+  city: string;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,7 +62,7 @@ type UtilTab = 'rent' | 'electricity' | 'custom';
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-const fIN = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MS_OPTS = [
   { v: 'all', l: 'All Months' },
@@ -74,7 +82,7 @@ const TAB_LABEL: Record<UtilTab, string> = {
 
 interface UtilsClientProps {
   entries: UtilEntry[];
-  properties: SerializableProperty[];
+  properties: UtilsProperty[];
   canCreate: boolean;
   canEdit: boolean;
   canDelete: boolean;
@@ -143,11 +151,13 @@ export function UtilsClient({
     return items;
   }, [entries, filterProp, filterMonth, filterYear]);
 
-  const rentPending  = allFiltered.filter((u) => u.type === 'rent'        && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
-  const elecPending  = allFiltered.filter((u) => u.type === 'electricity' && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
-  const totalAll     = allFiltered.reduce((s, u) => s + u.amount, 0);
-  const paidAll      = allFiltered.filter((u) => u.status === 'paid').reduce((s, u) => s + u.amount, 0);
-  const paidPct      = totalAll > 0 ? Math.round((paidAll / totalAll) * 100) : 0;
+  const rentPending   = allFiltered.filter((u) => u.type === 'rent'        && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
+  const elecPending   = allFiltered.filter((u) => u.type === 'electricity' && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
+  const customPending = allFiltered.filter((u) => u.type === 'custom'      && u.status === 'pending').reduce((s, u) => s + u.amount, 0);
+  const totalPending  = rentPending + elecPending + customPending;
+  const totalAll      = allFiltered.reduce((s, u) => s + u.amount, 0);
+  const paidAll       = allFiltered.filter((u) => u.status === 'paid').reduce((s, u) => s + u.amount, 0);
+  const paidPct       = totalAll > 0 ? Math.round((paidAll / totalAll) * 100) : 0;
 
   // ── Year options (current year ±5) ────────────────────────────────────────
   const yearOpts = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
@@ -244,7 +254,7 @@ export function UtilsClient({
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+      <div className="page-hdr" style={{ marginBottom: '14px' }}>
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Rent &amp; Utilities Tracker
         </div>
@@ -253,30 +263,38 @@ export function UtilsClient({
         )}
       </div>
 
-      {/* ── 3 KPI cards — verbatim from utilKpis innerHTML ───────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '11px', marginBottom: '14px' }}>
+      {/* ── 4 KPI cards ──────────────────────────────────────────────────── */}
+      <div className="rg4" style={{ marginBottom: '14px' }}>
         {/* Rent Pending */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--rd)', marginBottom: '4px' }}>Rent Pending</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>{fIN(rentPending)}</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(rentPending)}</div>
         </div>
         {/* Electricity Pending */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--go)', marginBottom: '4px' }}>Electricity Pending</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>{fIN(elecPending)}</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(elecPending)}</div>
         </div>
         {/* Paid % with progress bar */}
         <div className="cc" style={{ padding: '14px' }}>
           <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--gr)', marginBottom: '4px' }}>Paid {paidPct}%</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>{fIN(paidAll)} of {fIN(totalAll)}</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, wordBreak: 'break-word' }}>{fIN(paidAll)} of {fIN(totalAll)}</div>
           <div style={{ background: 'var(--s2)', borderRadius: '6px', height: '6px', marginTop: '6px', overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${paidPct}%`, background: 'var(--gr)', borderRadius: '6px' }} />
+          </div>
+        </div>
+        {/* Total Bills Pending — NEW (Bug 18) */}
+        <div className="cc" style={{ padding: '14px', border: '1.5px solid var(--bdr)' }}>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--bl)', marginBottom: '4px' }}>Total Bills Pending</div>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: 'var(--bl)', wordBreak: 'break-word' }}>{fIN(totalPending)}</div>
+          <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '4px' }}>
+            Rent + Electricity{customPending > 0 ? ' + Custom' : ''}
           </div>
         </div>
       </div>
 
       {/* ── Local filter row — isolated from global PeriodBar ────────────── */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', color: 'var(--t2)', fontWeight: 600 }}>Filter:</span>
         <select className="fsel" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)}>
           {MS_OPTS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}

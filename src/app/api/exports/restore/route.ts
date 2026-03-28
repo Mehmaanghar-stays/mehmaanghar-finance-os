@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole, RoleRequiredError } from "@/lib/permissions";
+import { regenReports } from "@/lib/regenReports";
 
 interface RestoreResult {
   table: string;
@@ -279,40 +280,8 @@ export async function POST(
   }
 
   // ---------------------------------------------------------------------------
-  // Expenses
+  // Expenses — model removed in migration remove_expense_model; skip silently
   // ---------------------------------------------------------------------------
-  if (Array.isArray(body.expenses)) {
-    try {
-      const rows = (body.expenses as Array<Record<string, unknown>>).filter(
-        (r) => typeof r.id === "string"
-      );
-      for (const r of rows) {
-        await prisma.expense.upsert({
-          where: { id: String(r.id) },
-          create: {
-            id: String(r.id),
-            property_id: String(r.property_id),
-            year: Number(r.year),
-            month: Number(r.month),
-            category: String(r.category ?? ""),
-            amount: Number(r.amount) || 0,
-            notes: r.notes ? String(r.notes) : null,
-          },
-          update: {
-            amount: Number(r.amount) || 0,
-            notes: r.notes ? String(r.notes) : null,
-          },
-        });
-      }
-      results.push({ table: "expenses", processed: rows.length });
-    } catch (err) {
-      results.push({
-        table: "expenses",
-        processed: 0,
-        error: err instanceof Error ? err.message : "Unknown error",
-      });
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Payouts
@@ -424,6 +393,15 @@ export async function POST(
   }
 
   const totalProcessed = results.reduce((s, r) => s + r.processed, 0);
+
+  // Regenerate all reports from restored ops data.
+  // Wrapped in try/catch — a partial restore (e.g. bookings without properties)
+  // may cause regen to skip some keys. Reports will self-correct on the next write.
+  try {
+    await regenReports();
+  } catch {
+    // Non-fatal: restore succeeded, reports will regenerate on next write
+  }
 
   return NextResponse.json({ results, total_processed: totalProcessed });
 }

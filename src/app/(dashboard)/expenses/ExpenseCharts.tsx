@@ -86,7 +86,7 @@ export function ExpenseCharts({
             const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
             const v = Number(ctx.raw ?? 0);
             const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0';
-            return ` ${ctx.label}: ₹${Math.round(v).toLocaleString('en-IN')} (${pct}%)`;
+            return ` ${ctx.label}: ₹${(Number(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${pct}%)`;
           },
         },
       },

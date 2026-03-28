@@ -21,6 +21,7 @@ export async function Topbar() {
     select: { username: true },
   });
   const username = user?.username ?? 'User';
+  const role     = session.role ?? '';
 
   function btnClass(...variants: string[]): string {
     return [styles.btn, ...variants.map((v) => styles[v])].join(' ');
@@ -42,7 +43,7 @@ export async function Topbar() {
       </div>
 
       <div className={styles['tb-r']}>
-        <TopbarActions />
+        <TopbarActions role={role} />
         <button
           type="button"
           className={btnClass('btn-g', 'btn-sm')}

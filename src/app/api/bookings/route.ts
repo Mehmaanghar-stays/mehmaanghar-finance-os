@@ -8,8 +8,11 @@
 //          Filters: ?property_id=, ?status=, ?platform=, ?from=, ?to=
 //          Pagination: ?page= (default 1), ?limit= (default 50)
 // POST   — create booking. SuperAdmin + Admin.
-//          guest_id is optional. If a guest name is passed without an existing
-//          id, return 422 — the caller must create the guest via /api/guests first.
+//          Accepts camelCase payload from BookingModal (propertyId, checkIn,
+//          checkOut, guestName, guestPhone, guestEmail, roomRevenue,
+//          bookingType, eventType, eventGuests, foodCost).
+//          If guestName is provided, the guest is upserted inline by name
+//          (phone + email updated if supplied). This matches the HTML behaviour.
 // PUT    — update booking. SuperAdmin + Admin.
 // DELETE — SuperAdmin only.
 //
@@ -26,6 +29,7 @@ import {
   RoleRequiredError,
 } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
+import { regenReports } from "@/lib/regenReports";
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -218,6 +222,30 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // Normalise camelCase keys sent by BookingModal → snake_case used below
+  if (body.propertyId !== undefined && body.property_id === undefined)
+    body.property_id = body.propertyId;
+  if (body.checkIn !== undefined && body.check_in === undefined)
+    body.check_in = body.checkIn;
+  if (body.checkOut !== undefined && body.check_out === undefined)
+    body.check_out = body.checkOut;
+  if (body.guestName !== undefined && body.guest_name === undefined)
+    body.guest_name = body.guestName;
+  if (body.guestPhone !== undefined && body.guest_phone === undefined)
+    body.guest_phone = body.guestPhone;
+  if (body.guestEmail !== undefined && body.guest_email === undefined)
+    body.guest_email = body.guestEmail;
+  if (body.roomRevenue !== undefined && body.room_amount === undefined)
+    body.room_amount = body.roomRevenue;
+  if (body.bookingType !== undefined && body.booking_type === undefined)
+    body.booking_type = body.bookingType;
+  if (body.eventType !== undefined && body.event_type === undefined)
+    body.event_type = body.eventType;
+  if (body.eventGuests !== undefined && body.event_guests === undefined)
+    body.event_guests = body.eventGuests;
+  if (body.foodCost !== undefined && body.food_cost === undefined)
+    body.food_cost = body.foodCost;
+
   // Required fields
   if (typeof body.property_id !== "string" || body.property_id.trim() === "") {
     return NextResponse.json(
@@ -250,29 +278,47 @@ export async function POST(
     );
   }
 
-  // Guest handling: if a guest_name is passed without a guest_id, reject
-  if (
-    body.guest_id === undefined &&
-    typeof body.guest_name === "string" &&
-    body.guest_name.trim() !== ""
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "A guest name was provided without a guest_id. Create the guest first via POST /api/guests, then include the returned id as guest_id.",
-      },
-      { status: 422 }
-    );
+  // Guest handling: find by name or create inline (matches HTML behaviour).
+  // upsert is not used — Guest.name has no unique constraint.
+  // findFirst + create runs in a transaction to avoid race-condition duplicates.
+  let resolvedGuestId: string | null = null;
+  const guestName =
+    typeof body.guest_name === "string" ? body.guest_name.trim() : "";
+
+  if (guestName) {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const existing = await tx.guest.findFirst({
+          where: { name: guestName },
+          select: { id: true },
+        });
+        if (existing) return existing;
+        return tx.guest.create({
+          data: {
+            name: guestName,
+            phone:
+              typeof body.guest_phone === "string" && body.guest_phone.trim()
+                ? body.guest_phone.trim()
+                : null,
+            email:
+              typeof body.guest_email === "string" && body.guest_email.trim()
+                ? body.guest_email.trim()
+                : null,
+          },
+          select: { id: true },
+        });
+      });
+      resolvedGuestId = result.id;
+    } catch (err) {
+      return handleError(err);
+    }
   }
 
   try {
     const booking = await prisma.booking.create({
       data: {
         property_id: body.property_id.trim(),
-        guest_id:
-          typeof body.guest_id === "string" && body.guest_id.trim()
-            ? body.guest_id.trim()
-            : null,
+        guest_id: resolvedGuestId,
         check_in: new Date(body.check_in),
         check_out: new Date(body.check_out),
         nights: Math.floor(body.nights),
@@ -294,9 +340,9 @@ export async function POST(
         food_cost:
           typeof body.food_cost === "number" ? body.food_cost : null,
         services:
-          typeof body.services === "string"
-            ? body.services.trim() || null
-            : null,
+          Array.isArray(body.services)
+            ? JSON.stringify(body.services)
+            : typeof body.services === "string" ? body.services.trim() || null : null,
         rating:
           typeof body.rating === "number"
             ? Math.min(5, Math.max(1, Math.floor(body.rating)))
@@ -313,6 +359,9 @@ export async function POST(
           typeof body.notes === "string" ? body.notes.trim() || null : null,
       },
     });
+
+    // Regenerate reports from updated ops data (mirrors saveOps() → regenReportsFromOps())
+    await regenReports();
 
     return NextResponse.json({ data: serializeBooking(booking) }, { status: 201 });
   } catch (err) {
@@ -341,6 +390,22 @@ export async function PUT(
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
+
+  // Normalise camelCase keys from BookingModal → snake_case
+  if (body.checkIn !== undefined && body.check_in === undefined)
+    body.check_in = body.checkIn;
+  if (body.checkOut !== undefined && body.check_out === undefined)
+    body.check_out = body.checkOut;
+  if (body.roomRevenue !== undefined && body.room_amount === undefined)
+    body.room_amount = body.roomRevenue;
+  if (body.bookingType !== undefined && body.booking_type === undefined)
+    body.booking_type = body.bookingType;
+  if (body.eventType !== undefined && body.event_type === undefined)
+    body.event_type = body.eventType;
+  if (body.eventGuests !== undefined && body.event_guests === undefined)
+    body.event_guests = body.eventGuests;
+  if (body.foodCost !== undefined && body.food_cost === undefined)
+    body.food_cost = body.foodCost;
 
   const id = body.id;
   if (typeof id !== "string" || id.trim() === "") {
@@ -404,6 +469,8 @@ export async function PUT(
       data: updateData,
     });
 
+    await regenReports();
+
     return NextResponse.json({ data: serializeBooking(booking) });
   } catch (err) {
     return handleError(err);
@@ -442,6 +509,7 @@ export async function DELETE(
 
   try {
     await prisma.booking.delete({ where: { id: id.trim() } });
+    await regenReports();
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleError(err);

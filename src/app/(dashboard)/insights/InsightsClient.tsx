@@ -21,12 +21,26 @@ import { useState, useMemo, useEffect, useTransition } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD, getFYMonths } from '@/lib/period';
 import type { RepRow, PeriodState } from '@/lib/period';
 import { useToast } from '@/components/ui/Toast';
 import styles from '@/components/ui/ui.module.css';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — insights needs id, name, city, comm, capital
+// ---------------------------------------------------------------------------
+
+export interface InsightsProperty {
+  id:      string;
+  name:    string;
+  city:    string;
+  comm:    number;
+  capital: number;
+}
 
 const InsightCharts = dynamic(
   () => import('./InsightCharts').then((m) => ({ default: m.InsightCharts })),
@@ -38,12 +52,13 @@ const InsightCharts = dynamic(
 // ---------------------------------------------------------------------------
 
 function fI(n: number): string {
-  if (!n && n !== 0) return '₹0';
+  if (!n && n !== 0) return '₹0.00';
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -120,7 +135,7 @@ type AggResult = NonNullable<ReturnType<typeof withD>>;
 function genInsights(
   rs: RepRow[],
   a: AggResult,
-  propMap: Record<string, SerializableProperty>,
+  propMap: Record<string, InsightsProperty>,
 ): InsightItem[] {
   const ins: InsightItem[] = [];
 
@@ -185,7 +200,7 @@ const BLANK_TARGETS: Targets = { revenue: 0, occupancy: 0, roi: 0, expense_limit
 
 interface InsightsClientProps {
   reports: SerializableReport[];
-  properties: SerializableProperty[];
+  properties: InsightsProperty[];
   /** Server-fetched targets for current month/year. Empty object if none. */
   initialTargets: Partial<Targets>;
 }
@@ -205,6 +220,7 @@ export function InsightsClient({
   // ── Period store ──────────────────────────────────────────────────────────
   const { getFilteredReps, getFilteredRepsForMonth, ...periodState } = usePeriod();
   const { cM, cY } = periodState;
+  const filters = usePageFilters({ city: true, property: true });
 
   const allReps = reports as RepRow[];
 
@@ -214,8 +230,6 @@ export function InsightsClient({
     ...initialTargets,
   });
 
-  // Re-sync when period changes (different month = different targets)
-  // In v2: fetch targets for new month via SWR/React Query
   useEffect(() => {
     setTargets({ ...BLANK_TARGETS, ...initialTargets });
   }, [initialTargets]);
@@ -225,19 +239,46 @@ export function InsightsClient({
     () => Object.fromEntries(properties.map((p) => [p.id, p])),
     [properties],
   );
-  const propById = (pid: string) =>
-    propMap[pid] ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm } : null;
+
+  const propById = useMemo(
+    () => (pid: string) =>
+      propMap[pid] ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm } : null,
+    [propMap],
+  );
+
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: 'all' }),
+    [filters.city, filters.property],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
 
   // ── Filtered reps for current period ──────────────────────────────────────
   const filteredReps = useMemo(
-    () => getFilteredReps(allReps, propById),
+    () => getFilteredReps(allReps, propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, propMap, periodState.cPType, periodState.cM, periodState.cY,
+    [allReps, propById, pageFilterState, periodState.cPType, periodState.cM, periodState.cY,
      periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
-     periodState.cDay, periodState.cWeek, periodState.cCi, periodState.cPid, periodState.cComm],
+     periodState.cDay, periodState.cWeek],
   );
 
-  const agg = useMemo(() => withD(aggReps(filteredReps)), [filteredReps]);
+  // capital lookup for aggReps — ensures ROI is calculated correctly
+  const getCapital = useMemo(
+    () => (pid: string) => propMap[pid]?.capital ?? 0,
+    [propMap],
+  );
+
+  const agg = useMemo(
+    () => withD(aggReps(filteredReps, getCapital)),
+    [filteredReps, getCapital],
+  );
 
   // ── Trend periods for charts ──────────────────────────────────────────────
   const trendPeriods = useMemo(
@@ -250,18 +291,17 @@ export function InsightsClient({
   // ADR vs RevPAR trend — verbatim from rndInsights() tAdr block
   const adrTrend = useMemo(() => {
     return trendPeriods.map(({ m, y, l }) => {
-      const rs = getFilteredRepsForMonth(allReps, propById, m, y);
+      const rs = getFilteredRepsForMonth(allReps, propById, m, y, pageFilterState);
       const totalRoomRev = rs.reduce((s, r) => s + (r.roomRev ?? r.rev ?? 0), 0);
       const totalNights  = rs.reduce((s, r) => s + (r.nights ?? 0), 0);
       const totalDays    = rs.reduce((s, r) => s + (r.days   ?? 0), 0);
-      const adr    = totalNights > 0 ? Math.round(totalRoomRev / totalNights) : 0;
-      const revpar = totalDays   > 0 ? Math.round(totalRoomRev / totalDays)   : 0;
-      // Append year suffix when trend crosses calendar years
+      const adr    = totalNights > 0 ? totalRoomRev / totalNights : 0;
+      const revpar = totalDays   > 0 ? totalRoomRev / totalDays   : 0;
       const lbl = l + (y !== cY ? ' ' + String(y).slice(2) : '');
       return { l: lbl, adr, rv: revpar };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendPeriods, allReps, propMap, periodState.cCi, periodState.cPid, periodState.cComm]);
+  }, [trendPeriods, allReps, propMap, pageFilterState]);
 
   // Radar scores — verbatim normalisation from rndInsights()
   const radarScores = useMemo(() => {
@@ -280,8 +320,8 @@ export function InsightsClient({
     {
       let pm = cM - 1; let py = cY;
       if (pm <= 0) { pm += 12; py--; }
-      const prevRs  = getFilteredRepsForMonth(allReps, propById, pm, py);
-      const prevA   = aggReps(prevRs);
+      const prevRs  = getFilteredRepsForMonth(allReps, propById, pm, py, pageFilterState);
+      const prevA   = aggReps(prevRs, getCapital);
       if (prevA && prevA.rev > 0) {
         const growthRaw = ((agg.rev - prevA.rev) / prevA.rev) * 100;
         growthS = Math.min(100, Math.max(0, (growthRaw + 50) / 100 * 100));
@@ -300,7 +340,7 @@ export function InsightsClient({
       raw: { occRaw, roiRaw, margRaw, expCtrlRaw, propsWithRev, totalProps },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agg, filteredReps, allReps, propMap, cM, cY]);
+  }, [agg, filteredReps, allReps, propMap, getCapital, cM, cY]);
 
   // ── Insight cards ─────────────────────────────────────────────────────────
   const insights = useMemo(
@@ -331,26 +371,25 @@ export function InsightsClient({
                      targets.roi > 0 || targets.expense_limit > 0;
 
   // ── Empty state ───────────────────────────────────────────────────────────
-  if (!agg || !agg.rev) {
+  if (!agg || (!agg.rev && !agg.exp)) {
     return (
-      <div id="ins-empty" className="es">
-        <div className="es-ico">💡</div>
-        <div className="es-t">No Insights Yet</div>
-        <div className="es-s">Add bookings and expenses to generate insights.</div>
-        <Link href="/bookings" className="btn btn-or">+ Add Booking</Link>
-      </div>
+      <>
+        <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
+        <div id="ins-empty" className="es">
+          <div className="es-ico">💡</div>
+          <div className="es-t">No Insights Yet</div>
+          <div className="es-s">Add bookings and expenses to generate insights.</div>
+          <Link href="/bookings" className="btn btn-or">+ Add Booking</Link>
+        </div>
+      </>
     );
   }
 
-  // ── Property performance vs targets ───────────────────────────────────────
   const propPids = [...new Set(filteredReps.map((r) => r.pid))];
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div id="ins-content">
-
-      {/* ── Targets panel ─────────────────────────────────────────────────
-          Verbatim: .cc with orange border/background, 4-col grid of inputs */}
+      <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />
       <div className="cc" style={{ marginBottom: '16px', border: '1.5px solid var(--or)', background: 'var(--orp)' }}>
         <div className="ch">
           <div>
@@ -367,7 +406,7 @@ export function InsightsClient({
             Save Targets
           </button>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginTop: '8px' }}>
+        <div className="rg4" style={{ marginTop: '8px' }}>
           <div className={styles.fl}>
             <label>Revenue Target (₹)</label>
             <input
@@ -425,7 +464,7 @@ export function InsightsClient({
               const prop = propMap[pid];
               if (!prop) return null;
               const pReps = filteredReps.filter((r) => r.pid === pid);
-              const pa = withD(aggReps(pReps));
+              const pa = withD(aggReps(pReps, getCapital));
               if (!pa) return null;
 
               // Build status rows — same logic as HTML tgtHtml block
@@ -437,7 +476,7 @@ export function InsightsClient({
               if (targets.revenue > 0) {
                 const met = pa.rev >= targets.revenue;
                 statuses.push({
-                  label: 'Revenue', val: fI(pa.rev), target: fI(targets.revenue),
+                  label: 'Revenue', val: fIN(pa.rev), target: fIN(targets.revenue),
                   pct: Math.min(100, Math.round(pa.rev / targets.revenue * 100)), met,
                 });
               }
@@ -451,14 +490,14 @@ export function InsightsClient({
               if (targets.roi > 0 && pa._hasCapital) {
                 const met = (pa.roi ?? 0) >= targets.roi;
                 statuses.push({
-                  label: 'ROI', val: (pa.roi ?? 0) + '%', target: targets.roi + '%',
+                  label: 'ROI', val: pa._hasCapital ? (pa.roi ?? 0).toFixed(2) + '%' : 'N/A', target: targets.roi + '%',
                   pct: Math.min(100, Math.round(Math.max(0, pa.roi ?? 0) / targets.roi * 100)), met,
                 });
               }
               if (targets.expense_limit > 0) {
                 const met = pa.exp <= targets.expense_limit;
                 statuses.push({
-                  label: 'Expenses', val: fI(pa.exp), target: '≤' + fI(targets.expense_limit),
+                  label: 'Expenses', val: fIN(pa.exp), target: '≤' + fIN(targets.expense_limit),
                   pct: Math.min(100, Math.round(pa.exp / targets.expense_limit * 100)), met,
                 });
               }

@@ -16,6 +16,10 @@
 import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { matchesPeriod } from '@/lib/period';
 import type { PeriodState } from '@/lib/period';
 import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
@@ -31,12 +35,12 @@ const CrmCharts = dynamic(
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-const fIN = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fI  = (n: number) => {
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 };
 
 // ---------------------------------------------------------------------------
@@ -83,13 +87,24 @@ interface CrmClientProps {
 
 export function CrmClient({ guests, bookings }: CrmClientProps) {
   // ── Local state ───────────────────────────────────────────────────────────
-  const [segFilter, setSegFilter]   = useState('all');
-  const [propFilter, setPropFilter] = useState('all');
   const [panelOpen, setPanelOpen]   = useState(false);
   const [panelGuest, setPanelGuest] = useState<SerializableGuest | null>(null);
 
-  // ── Period store ──────────────────────────────────────────────────────────
+  // ── Period store + per-page filters ───────────────────────────────────────
   const periodState = usePeriod();
+  const filters = usePageFilters({ property: true, segment: true });
+
+  // ── Filter option lists ───────────────────────────────────────────────────
+  const propertyOptions: FilterOption[] = useMemo(() => {
+    const s = new Set(bookings.map((b) => b.propertyName).filter(Boolean));
+    return [...s].sort().map((n) => ({ value: n, label: n }));
+  }, [bookings]);
+
+  const segmentOptions: FilterOption[] = [
+    { value: 'VIP',      label: 'VIP'      },
+    { value: 'Frequent', label: 'Frequent' },
+    { value: 'One-time', label: 'One-time' },
+  ];
 
   // ── Period-filtered bookings ──────────────────────────────────────────────
   const periodBks = useMemo(
@@ -109,15 +124,19 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
       raw[b.guestId].stays++;
       raw[b.guestId].nights += b.nights ?? 0;
       raw[b.guestId].spend  += b.revenue ?? 0;
+      // Collect ratings from bookings (rating field now present on SerializableGuestBooking)
+      if (b.rating && b.rating > 0) raw[b.guestId].ratings.push(b.rating);
     });
-    // Derive avgRating from ratings array so downstream consumers get { stays, nights, spend, avgRating }
+    // Derive avgRating from collected ratings
     const m: Record<string, { stays: number; nights: number; spend: number; avgRating: number }> = {};
     for (const [gid, v] of Object.entries(raw)) {
       m[gid] = {
         stays: v.stays,
         nights: v.nights,
         spend: v.spend,
-        avgRating: v.ratings.length ? v.ratings.reduce((a, b) => a + b, 0) / v.ratings.length : 0,
+        avgRating: v.ratings.length
+          ? +(v.ratings.reduce((a, r) => a + r, 0) / v.ratings.length).toFixed(1)
+          : 0,
       };
     }
     return m;
@@ -135,7 +154,8 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
   const repeat      = activeGuests.filter((g) => (guestPeriodMap[g.id]?.stays ?? 0) > 1).length;
   const returnRate  = tot > 0 ? +((repeat / tot) * 100).toFixed(0) : 0;
   const totalSpend  = activeGuests.reduce((s, g) => s + (guestPeriodMap[g.id]?.spend ?? 0), 0);
-  const avgCLV      = tot > 0 ? Math.round(totalSpend / tot) : 0;
+  // avgCLV = average all-time spend per active guest (true lifetime value, not period spend)
+  const avgCLV      = tot > 0 ? +(activeGuests.reduce((s, g) => s + g.allTimeSpend, 0) / tot).toFixed(2) : 0;
   const allRatings  = activeGuests
     .map((g) => g.avgRating)
     .filter((r): r is number => r !== null && r > 0);
@@ -162,12 +182,6 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
     return ins;
   }, [tot, activeGuests, guestPeriodMap, totalSpend, returnRate, avgRating]);
 
-  // ── All unique properties (for filter) ───────────────────────────────────
-  const allPropertyNames = useMemo(() => {
-    const s = new Set(bookings.map((b) => b.propertyName).filter(Boolean));
-    return [...s].sort();
-  }, [bookings]);
-
   // ── Tags + filter ─────────────────────────────────────────────────────────
   const guestsWithTags = useMemo(
     () => activeGuests.map((g) => ({
@@ -180,15 +194,15 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
 
   const filteredGuests = useMemo(() => {
     let list = guestsWithTags;
-    if (segFilter !== 'all') list = list.filter(({ tags }) => tags.includes(segFilter));
-    if (propFilter !== 'all') {
+    if (filters.segment !== 'all') list = list.filter(({ tags }) => tags.includes(filters.segment));
+    if (filters.property !== 'all') {
       const guestIdsByProp = new Set(
-        bookings.filter((b) => b.propertyName === propFilter).map((b) => b.guestId).filter(Boolean),
+        bookings.filter((b) => b.propertyName === filters.property).map((b) => b.guestId).filter(Boolean),
       );
       list = list.filter(({ g }) => guestIdsByProp.has(g.id));
     }
     return [...list].sort((a, b) => b.g.allTimeSpend - a.g.allTimeSpend);
-  }, [guestsWithTags, segFilter, propFilter, bookings]);
+  }, [guestsWithTags, filters.segment, filters.property, bookings]);
 
   // ── Top 5 for chart ───────────────────────────────────────────────────────
   const top5 = useMemo(
@@ -216,15 +230,51 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
   return (
     <>
       {/* ── Page header ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div className="page-hdr">
         <div className="stl" style={{ marginBottom: 0 }}><div className="d" />Guest Intelligence</div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button className="btn btn-g btn-sm" onClick={() => {
+            downloadCsv(
+              ['Guest', 'Phone', 'Email', 'Tags', 'Stays (all-time)', 'Nights (all-time)', 'Period Spend', 'Lifetime CLV', 'Rating', 'Last Visit'],
+              filteredGuests.map(({ g, tags, periodSpend }) => [
+                g.name, g.phone || '', g.email || '', tags.join(', '),
+                String(g.allTimeStays), String(g.allTimeNights),
+                String(periodSpend), String(g.allTimeSpend),
+                g.avgRating ? String(g.avgRating) : '', g.lastVisit || '',
+              ]),
+              `mg-guests-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
+          }}>↓ CSV</button>
+          <button className="btn btn-g btn-sm" onClick={async () => {
+            const { exportTablePdf } = await import('@/components/layout/exportPdf');
+            await exportTablePdf({
+              title: 'Guest CRM',
+              headers: ['Guest', 'Phone', 'Tags', 'Stays', 'Nights', 'Period Spend', 'Lifetime CLV', 'Rating', 'Last Visit'],
+              rows: filteredGuests.map(({ g, tags, periodSpend }) => [
+                g.name, g.phone || '—', tags.join(', ') || '—',
+                String(g.allTimeStays), String(g.allTimeNights),
+                'Rs. ' + periodSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                'Rs. ' + g.allTimeSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                g.avgRating ? String(g.avgRating) : '—', g.lastVisit || '—',
+              ]),
+              filename: `mg-guests-${new Date().toISOString().slice(0, 10)}.pdf`,
+            });
+          }}>↓ PDF</button>
+        </div>
       </div>
+
+      <PageFilterBar
+        filters={filters}
+        config={{ property: true, segment: true }}
+        properties={propertyOptions}
+        segments={segmentOptions}
+      />
 
       {/* ── 5 KPI cards — verbatim crmKpis ──────────────────────────────── */}
       <MetricCardGrid>
         <MetricCard label="Total Guests" value={String(tot)}          sub="Active this period"          iconText="👤" iconVariant="b" />
         <MetricCard label="Return Rate"  value={returnRate + '%'}     sub={returnRate >= 30 ? '✓ Good loyalty' : '⚠ Below 30% target'} iconText="↩" iconVariant={returnRate >= 30 ? 'g' : 'go'} />
-        <MetricCard label="Avg CLV"      value={fI(avgCLV)}           sub="Customer lifetime value"    iconText="₹" iconVariant="o" />
+        <MetricCard label="Avg CLV"      value={fIN(avgCLV)}           sub="Customer lifetime value"    iconText="₹" iconVariant="o" />
         <MetricCard label="Avg Rating"   value={avgRating > 0 ? avgRating + ' ⭐' : 'N/A'} sub="Guest satisfaction" iconText="⭐" iconVariant="b" />
         <MetricCard label="Avg Stay"     value={avgStay + ' nights'}  sub="Nights per visit"           iconText="🌙" iconVariant="b" />
       </MetricCardGrid>
@@ -255,20 +305,6 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
       <div className="tw">
         <div className="th">
           <div className="ct">Guest Database</div>
-          <div style={{ display: 'flex', gap: '6px' }}>
-            {/* Segment filter */}
-            <select className="fsel" value={segFilter} onChange={(e) => setSegFilter(e.target.value)}>
-              <option value="all">All Segments</option>
-              <option value="VIP">VIP</option>
-              <option value="Frequent">Frequent</option>
-              <option value="One-time">One-time</option>
-            </select>
-            {/* Property filter */}
-            <select className="fsel" value={propFilter} onChange={(e) => setPropFilter(e.target.value)}>
-              <option value="all">All Properties</option>
-              {allPropertyNames.map((n) => <option key={n}>{n}</option>)}
-            </select>
-          </div>
         </div>
 
         {tot === 0 ? (
@@ -374,7 +410,7 @@ function GuestProfile({
   bookings: SerializableGuestBooking[];
   tags: string[];
 }) {
-  const fIN = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+  const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const avgStay = guest.allTimeStays > 0
     ? (guest.allTimeNights / guest.allTimeStays).toFixed(1)
     : '0';

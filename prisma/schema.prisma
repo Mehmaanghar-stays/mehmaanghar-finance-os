@@ -1,22 +1,20 @@
 // prisma/schema.prisma
 // =============================================================================
 // MehmanGhar Financial OS — Prisma Schema
-// v3.0 — Phase 5 (updated with gap fields identified in Phase 5 evaluation)
+// v3.1 — Broker fields added to Property
 //
-// Prisma 7 notes:
-//   - datasource block has `provider` only — url lives in prisma.config.ts.
-//   - generator uses `prisma-client` provider + `engineType = "client"`.
-//
-// 11 tables:
+// 10 tables:
 //   Auth / RBAC  : roles, users
 //   Core data    : properties, investors, guests, bookings
-//   Finance      : daily_expenses, expenses, payouts
+//   Finance      : daily_expenses, payouts
 //   Reporting    : reports
 //   Config       : utils_settings
 //
 // Migration history:
 //   20260322155931_init_schema  — initial schema (Phase 2)
 //   add_phase5_fields           — gap fields for Phase 6 API routes (Phase 5)
+//   remove_expense_model        — removed unused Expense model
+//   add_broker_fields           — broker_name, broker_pct, broker_public on Property
 // =============================================================================
 
 generator client {
@@ -26,7 +24,6 @@ generator client {
 }
 
 datasource db {
-  // provider only — url is configured in prisma.config.ts (Prisma 7)
   provider = "postgresql"
 }
 
@@ -75,16 +72,15 @@ model Property {
   name    String
   address String?
 
-  // ── Phase 5 gap fields ────────────────────────────────────────────────────
   city    String  @default("")
   state   String  @default("")
 
-  /// Commission % passed to calcF(). e.g. 25.000 = 25%.
-  /// Per v3 plan Section 4.2: calcCommission() uses Operating Profit, not Revenue.
+  /// MHG commission % passed to calcF(). e.g. 25.000 = 25%.
+  /// calcCommission() uses Operating Profit, not Revenue.
   comm    Decimal @db.Decimal(6, 3) @default(25)
 
   /// Property-level capital base for ROI calculation.
-  /// calcROI() returns null (not 0) when this is zero — v3 plan Section 4.2.
+  /// calcROI() returns null (not 0) when this is zero.
   capital Decimal @db.Decimal(14, 2) @default(0)
 
   /// Property type label — e.g. "Apartment", "Villa", "Studio"
@@ -95,11 +91,21 @@ model Property {
 
   /// Saved assets (security deposits, advances, furniture).
   /// Shape: Array<{ name: string; amount: number; type: "refundable"|"recoverable" }>
-  /// These are NOT included in ROI or operating expenses.
   assets  Json    @default("[]")
-  // ── End Phase 5 gap fields ─────────────────────────────────────────────────
 
-  /// Supabase Storage path — future scope. Path only, not full URL (v3 plan Section 3.4).
+  // ── Broker fields ──────────────────────────────────────────────────────────
+  /// Name of the broker / co-agent (e.g. "Adil"). Null if no broker.
+  broker_name   String?
+
+  /// Broker commission % (e.g. 10.000 = 10%). 0 if no broker.
+  broker_pct    Decimal @db.Decimal(6, 3) @default(0)
+
+  /// When true, broker % is added to MHG comm in all investor-facing displays.
+  /// When false, broker is paid internally by MHG — platform shows only comm%.
+  broker_public Boolean @default(false)
+  // ── End broker fields ──────────────────────────────────────────────────────
+
+  /// Supabase Storage path — future scope.
   image_path String?
 
   created_at DateTime @default(now())
@@ -108,7 +114,6 @@ model Property {
   investors      Investor[]
   bookings       Booking[]
   daily_expenses DailyExpense[]
-  expenses       Expense[]
   payouts        Payout[]
 
   @@map("properties")
@@ -121,12 +126,10 @@ model Investor {
 
   name String
 
-  // ── Phase 5 gap fields ────────────────────────────────────────────────────
   contact String?
   email   String?
-  // ── End Phase 5 gap fields ─────────────────────────────────────────────────
 
-  /// Used in calcROI(). Returns null (not 0) when zero — v3 plan Section 4.2.
+  /// Used in calcROI(). Returns null (not 0) when zero.
   capital   Decimal @db.Decimal(14, 2)
 
   /// Profit share percentage (e.g. 40.000 = 40%).
@@ -148,12 +151,8 @@ model Guest {
   email       String?
   phone       String?
   nationality String?
-
-  // ── Phase 5 gap field ─────────────────────────────────────────────────────
-  city  String?
-  // ── End Phase 5 gap field ──────────────────────────────────────────────────
-
-  notes String?
+  city        String?
+  notes       String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -174,40 +173,20 @@ model Booking {
   check_in  DateTime @db.Date
   check_out DateTime @db.Date
 
-  /// Stored (not computed) — used in ADR and RevPAR in calcF().
   nights  Int
   revenue Decimal @db.Decimal(14, 2)
 
-  // ── Phase 5 gap fields ────────────────────────────────────────────────────
-  /// Amount charged for the room component specifically.
   room_amount  Decimal? @db.Decimal(14, 2)
-
-  /// "stay" | "event" | "dayuse" etc.
   booking_type String?
-
-  /// For event bookings: event category label.
   event_type   String?
-
-  /// For event bookings: number of guests.
   event_guests Int?
-
-  /// Food/catering cost associated with the booking.
   food_cost    Decimal? @db.Decimal(14, 2)
-
-  /// Additional services (e.g. "Airport transfer, Laundry").
   services     String?
-
-  /// Guest rating 1–5 left after checkout.
   rating       Int?
-  // ── End Phase 5 gap fields ─────────────────────────────────────────────────
 
-  /// "Airbnb" | "Booking.com" | "Direct" | "MakeMyTrip" | etc.
   platform String?
-
-  /// "confirmed" | "checked_in" | "checked_out" | "cancelled"
-  status String @default("confirmed")
-
-  notes String?
+  status   String  @default("confirmed")
+  notes    String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -219,7 +198,6 @@ model Booking {
 // FINANCE
 // =============================================================================
 
-/// Day-level expense log (Daily Expenses tab).
 model DailyExpense {
   id          String   @id @default(cuid())
   property_id String
@@ -229,9 +207,6 @@ model DailyExpense {
   category     String
   description  String?
   amount       Decimal  @db.Decimal(14, 2)
-
-  /// Supabase Storage path — future scope. Path only (v3 plan Section 3.4).
-  /// UI shows icon by default; signed URL fetched only on click (v3 plan Section 3.2).
   invoice_path String?
 
   created_at DateTime @default(now())
@@ -240,25 +215,6 @@ model DailyExpense {
   @@map("daily_expenses")
 }
 
-/// Period-level operating expense (Expenses tab) — e.g. rent, salaries.
-model Expense {
-  id          String   @id @default(cuid())
-  property_id String
-  property    Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
-
-  year     Int
-  month    Int
-  category String
-  amount   Decimal @db.Decimal(14, 2)
-  notes    String?
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@map("expenses")
-}
-
-/// Investor payout record.
 model Payout {
   id          String   @id @default(cuid())
   property_id String
@@ -270,19 +226,11 @@ model Payout {
   year  Int
   month Int
 
-  /// Computed from calcF() — what the investor is owed.
   amount_owed Decimal @db.Decimal(14, 2)
-
-  /// Actual amount paid. Null if unpaid.
   amount_paid Decimal?  @db.Decimal(14, 2)
   paid_on     DateTime? @db.Date
-
-  // ── Phase 5 gap field ─────────────────────────────────────────────────────
-  /// Payment reference number / UTR / transaction ID.
-  reference String?
-  // ── End Phase 5 gap field ──────────────────────────────────────────────────
-
-  notes String?
+  reference   String?
+  notes       String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -294,17 +242,15 @@ model Payout {
 // REPORTING
 // =============================================================================
 
-/// Generated report record. Immutable once created.
 model Report {
   id          String  @id @default(cuid())
   property_id String?
 
   title       String
-  period_type String // "monthly" | "quarterly" | "annual" | "financial_year"
+  period_type String
   year        Int
-  month       Int?   // null for annual / financial_year reports
+  month       Int?
 
-  /// Full calcF() output plus aggregations.
   data Json
 
   created_at DateTime @default(now())
@@ -316,7 +262,6 @@ model Report {
 // CONFIG
 // =============================================================================
 
-/// Key-value config store for the Utils tab. Editable by SuperAdmin.
 model UtilsSetting {
   id          String  @id @default(cuid())
   key         String  @unique

@@ -8,10 +8,17 @@
 //   - Empty state when no revenue data for the period
 //   - Three .cfc summary cards: Cash In / Cash Out / Net to Investors
 //   - .crow.re: CashFlowChart (12-month) + RevExpenseBar (12-month)
+//
+// FIX (Bug 10): propById was () => null — city/property filters never applied.
+// Now builds propMap from the properties prop and passes a proper propById
+// to getFilteredReps() and getFilteredRepsForMonth().
 
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { usePeriod } from '@/hooks/usePeriod';
+import { usePageFilters } from '@/hooks/usePageFilters';
+import { PageFilterBar } from '@/components/layout/PageFilterBar';
+import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD, getFYMonths } from '@/lib/period';
 import type { RepRow, PeriodState } from '@/lib/period';
 import { CashFlowChart } from '@/components/charts/CashFlowChart';
@@ -21,15 +28,27 @@ import type { RevExpTrendPoint } from './RevExpenseBar';
 import type { SerializableReport } from '../dashboard/page';
 
 // ---------------------------------------------------------------------------
-// Formatting helpers (verbatim fI / fIN from the HTML)
+// Minimal property type — cashflow only needs id, name, city, comm, capital
+// ---------------------------------------------------------------------------
+
+export interface CashFlowProperty {
+  id:      string;
+  name:    string;
+  city:    string;
+  comm:    number;
+  capital: number;
+}
+
+// ---------------------------------------------------------------------------
+// Formatting helpers — full precision with 2 decimal places
 // ---------------------------------------------------------------------------
 
 function fI(n: number): string {
-  if (!n && n !== 0) return '₹0';
+  if (!n && n !== 0) return '₹0.00';
   const v = Math.abs(n);
-  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(1) + 'L';
-  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(0) + 'K';
-  return (n < 0 ? '-' : '') + '₹' + Math.round(v);
+  if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
+  if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
+  return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
 
 const MS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -103,31 +122,60 @@ function getPeriodMonths(
 
 interface CashFlowClientProps {
   reports: SerializableReport[];
+  properties: CashFlowProperty[];
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function CashFlowClient({ reports }: CashFlowClientProps) {
+export function CashFlowClient({ reports, properties }: CashFlowClientProps) {
   const { getFilteredReps, getFilteredRepsForMonth, ...periodState } = usePeriod();
   const { cM, cY } = periodState;
+  const filters = usePageFilters({ city: true, property: true });
 
   const allReps = reports as RepRow[];
 
-  // ── Filtered reps for current period ──────────────────────────────────────
-  const filteredReps = useMemo(
-    () => getFilteredReps(allReps, () => null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, periodState.cPType, periodState.cM, periodState.cY,
-     periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
-     periodState.cDay, periodState.cWeek, periodState.cCi, periodState.cPid, periodState.cComm],
+  const propMap = useMemo(
+    () => Object.fromEntries(properties.map((p) => [p.id, p])),
+    [properties],
   );
 
-  // ── Aggregate ─────────────────────────────────────────────────────────────
-  const agg = useMemo(() => withD(aggReps(filteredReps)), [filteredReps]);
+  const propById = useMemo(
+    () => (pid: string) => propMap[pid]
+      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+      : null,
+    [propMap],
+  );
 
-  // ── 12-month trend periods ─────────────────────────────────────────────────
+  const pageFilterState = useMemo(
+    () => ({ cCi: filters.city, cPid: filters.property, cComm: 'all' }),
+    [filters.city, filters.property],
+  );
+
+  const cityOptions: FilterOption[] = useMemo(
+    () => [...new Set(properties.map((p) => p.city).filter(Boolean))].sort().map((c) => ({ value: c, label: c })),
+    [properties],
+  );
+  const propOptions: FilterOption[] = useMemo(
+    () => properties.map((p) => ({ value: p.id, label: p.name })),
+    [properties],
+  );
+
+  const filteredReps = useMemo(
+    () => getFilteredReps(allReps, propById, pageFilterState),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allReps, propById, pageFilterState,
+     periodState.cPType, periodState.cM, periodState.cY,
+     periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
+     periodState.cDay, periodState.cWeek],
+  );
+
+  const agg = useMemo(
+    () => withD(aggReps(filteredReps, (pid) => propMap[pid]?.capital ?? 0)),
+    [filteredReps, propMap],
+  );
+
   const trendPeriods = useMemo(
     () => getPeriodMonths(12, periodState as PeriodState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,55 +183,45 @@ export function CashFlowClient({ reports }: CashFlowClientProps) {
      periodState.cFY, periodState.cDateFrom, periodState.cDateTo],
   );
 
-  // ── CashFlowChart data — verbatim from rndCashflow() ─────────────────────
-  // ci = Math.round(rev / 1000)
-  // co = Math.round((exp + commission) / 1000)
   const cfTrend: CashFlowTrendPoint[] = useMemo(
-    () =>
-      trendPeriods.map(({ m, y, l }) => {
-        const rs = getFilteredRepsForMonth(allReps, () => null, m, y);
-        const ta = withD(aggReps(rs));
-        return {
-          l,
-          ci: Math.round((ta?.rev ?? 0) / 1000),
-          co: Math.round(((ta?.exp ?? 0) + (ta?.commission ?? 0)) / 1000),
-        };
-      }),
+    () => trendPeriods.map(({ m, y, l }) => {
+      const rs = getFilteredRepsForMonth(allReps, propById, m, y, pageFilterState);
+      const ta = withD(aggReps(rs, (pid) => propMap[pid]?.capital ?? 0));
+      return { l, ci: ta?.rev ?? 0, co: (ta?.exp ?? 0) + (ta?.commission ?? 0) };
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [trendPeriods, allReps, periodState.cCi, periodState.cPid, periodState.cComm],
+    [trendPeriods, allReps, propById, propMap, pageFilterState],
   );
 
-  // ── RevExpenseBar data — verbatim from rndCashflow() ─────────────────────
   const expTrend: RevExpTrendPoint[] = useMemo(
-    () =>
-      trendPeriods.map(({ m, y, l }) => {
-        const rs = getFilteredRepsForMonth(allReps, () => null, m, y);
-        const ta = withD(aggReps(rs));
-        return {
-          l,
-          rev: Math.round((ta?.rev ?? 0) / 1000),
-          exp: Math.round((ta?.exp ?? 0) / 1000),
-        };
-      }),
+    () => trendPeriods.map(({ m, y, l }) => {
+      const rs = getFilteredRepsForMonth(allReps, propById, m, y, pageFilterState);
+      const ta = withD(aggReps(rs, (pid) => propMap[pid]?.capital ?? 0));
+      return { l, rev: ta?.rev ?? 0, exp: ta?.exp ?? 0 };
+    }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [trendPeriods, allReps, periodState.cCi, periodState.cPid, periodState.cComm],
+    [trendPeriods, allReps, propById, propMap, pageFilterState],
   );
 
-  // ── Empty state — verbatim: !a || !a.rev ──────────────────────────────────
-  if (!agg || !agg.rev) {
+  const filterBar = <PageFilterBar filters={filters} config={{ city: true, property: true }} cities={cityOptions} properties={propOptions} />;
+
+  if (!agg || (!agg.rev && !agg.exp)) {
     return (
       <div id="cf-empty" className="es">
         <div className="es-ico">💸</div>
         <div className="es-t">No Cash Flow Data</div>
-        <div className="es-s">Add bookings and expenses to see cash flow.</div>
-        <Link href="/bookings" className="btn btn-or">+ Add Booking</Link>
+        <div className="es-s">
+          Add bookings via Monthly Entry or the Bookings page — reports generate
+          automatically after saving. Then return here to see cash flow.
+        </div>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '4px' }}>
+          <Link href="/monthlyentry" className="btn btn-or">+ Monthly Entry</Link>
+          <Link href="/bookings" className="btn btn-g">+ Add Booking</Link>
+        </div>
       </div>
     );
   }
 
-  // ── Period label for card subtitles ───────────────────────────────────────
-  // Matches the HTML: `Total Revenue — ${MS[cM]} ${cY}`
-  // For non-monthly periods a shorter label is used.
   const periodLabel = periodState.cPType === 'monthly'
     ? `${MS[cM]} ${cY}`
     : periodState.cPType === 'fy'
@@ -194,13 +232,7 @@ export function CashFlowClient({ reports }: CashFlowClientProps) {
 
   return (
     <div id="cf-content">
-
-      {/* ── Three .cfc summary cards ────────────────────────────────────────
-          Verbatim from rndCashflow() innerHTML template:
-            .cfc.in  — 💰 Cash In       = revenue
-            .cfc.out — 💸 Cash Out      = expenses + commission
-            .cfc.net — 📊 Net to Investors = invProfit
-      */}
+      {filterBar}
       <div className="cfrow" id="cfCards">
         <div className="cfc in">
           <div className="cfc-l">💰 Cash In</div>

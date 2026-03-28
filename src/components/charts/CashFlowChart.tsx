@@ -43,9 +43,9 @@ ChartJS.defaults.color = CHART_DEFAULTS.color;
 export interface CashFlowTrendPoint {
   /** Month label, e.g. "Jan" */
   l: string;
-  /** Cash in (revenue) expressed in ₹K units — e.g. Math.round(rev / 1000) */
+  /** Cash in (revenue) in full rupees */
   ci: number;
-  /** Cash out (expenses + commission) in ₹K units */
+  /** Cash out (expenses + commission) in full rupees */
   co: number;
 }
 
@@ -94,7 +94,14 @@ export function CashFlowChart({ trend }: CashFlowChartProps) {
       x: { grid: { display: false } },
       y: {
         grid: { color: '#F1F0EC' },
-        ticks: { callback: (v: number | string) => '₹' + v + 'K' },
+        ticks: {
+          callback: (v: number | string) => {
+            const n = Number(v);
+            if (n >= 100000) return '₹' + (n / 100000).toFixed(1) + 'L';
+            if (n >= 1000)   return '₹' + (n / 1000).toFixed(0) + 'K';
+            return '₹' + n;
+          },
+        },
       },
     },
   };

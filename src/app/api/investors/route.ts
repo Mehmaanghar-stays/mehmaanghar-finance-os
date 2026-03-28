@@ -151,6 +151,12 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  // Normalise camelCase keys sent by InvModal → snake_case expected by Prisma
+  if (body.propertyId !== undefined && body.property_id === undefined)
+    body.property_id = body.propertyId;
+  if (body.sharePct !== undefined && body.share_pct === undefined)
+    body.share_pct = body.sharePct;
+
   // Required fields validation
   if (typeof body.property_id !== "string" || body.property_id.trim() === "") {
     return NextResponse.json(
@@ -220,6 +226,10 @@ export async function PUT(
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
+
+  // Normalise camelCase keys from InvModal edit payload
+  if (body.sharePct !== undefined && body.share_pct === undefined)
+    body.share_pct = body.sharePct;
 
   const id = body.id;
   if (typeof id !== "string" || id.trim() === "") {

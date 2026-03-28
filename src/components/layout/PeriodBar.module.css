@@ -30,16 +30,21 @@
 }
 
 .fsel {
-  background: var(--s2);
+  background-color: var(--s2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
   border: 1px solid var(--bdr);
   border-radius: 7px;
-  padding: 6px 10px;
+  padding: 6px 28px 6px 10px;
   font-size: 12.5px;
   color: var(--tx);
   font-family: 'Sora', sans-serif;
   cursor: pointer;
   outline: none;
   transition: border-color .14s;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .fsel:focus {
@@ -75,4 +80,68 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/* responsive                                                                  */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+/* responsive — Tablet: structured grid, 3 items per row */
+@media (max-width: 1023px) {
+  .pbar {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 8px;
+    align-items: center;
+  }
+
+  /* responsive — "View by:" label sits in first cell */
+  .plbl {
+    white-space: nowrap;
+  }
+
+  /* responsive — Divider hidden on mobile (grid handles spacing) */
+  .fdiv {
+    display: none;
+  }
+
+  /* responsive — Control group spans full width */
+  .ctrl-group {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* responsive — Selects fill available space */
+  .fsel {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* responsive — Mobile: tighter spacing */
+@media (max-width: 639px) {
+  .pbar {
+    padding: 10px 12px;
+    gap: 6px 6px;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  /* responsive — "View by:" label spans full row */
+  .plbl {
+    grid-column: 1 / -1;
+  }
+
+  /* responsive — Type selector spans 2 columns */
+  .ctrl-group {
+    grid-column: 1 / -1;
+  }
+
+  /* responsive — Selects: each takes one column */
+  .fsel {
+    font-size: 11.5px;
+    padding: 6px 8px;
+    min-width: 0;
+    width: 100%;
+  }
 }
