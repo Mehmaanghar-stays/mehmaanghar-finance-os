@@ -1,15 +1,13 @@
 // src/app/(dashboard)/cashflow/page.tsx
 //
 // Cash Flow page — Server Component shell.
-//
-// Fetches Report rows + Property rows and passes both to <CashFlowClient />.
-// Properties are needed so the PageFilterBar can populate city/property
-// dropdowns and propById can resolve city+comm for filter logic.
+// Fetches Report rows + Property rows (id, name, city, comm only — used for
+// filter dropdowns and propById lookup). Capital base from investor sum.
 
 import { prisma } from '@/lib/db';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
 import { CashFlowClient } from './CashFlowClient';
+import type { CashFlowProperty } from './CashFlowClient';
 
 export default async function CashFlowPage() {
   // ── Fetch reports ─────────────────────────────────────────────────────────
@@ -49,23 +47,28 @@ export default async function CashFlowPage() {
     }];
   });
 
-  // ── Fetch properties (needed for city/property filter dropdowns) ──────────
+  // ── Fetch properties — only id, name, city, comm needed ──────────────────
   const rawProps = await prisma.property.findMany({
-    select: { id: true, name: true, city: true, comm: true, capital: true },
+    select: { id: true, name: true, city: true, comm: true },
     orderBy: { name: 'asc' },
   });
 
-  const properties: SerializableProperty[] = rawProps.map((p) => ({
+  // Capital base = sum of investor.capital per property (consistent with
+  // regenReports, dashboard, and properties page).
+  const rawInvestorCapitals = await prisma.investor.findMany({
+    select: { property_id: true, capital: true },
+  });
+  const investorCapitalMap: Record<string, number> = {};
+  for (const inv of rawInvestorCapitals) {
+    investorCapitalMap[inv.property_id] = (investorCapitalMap[inv.property_id] ?? 0) + Number(inv.capital);
+  }
+
+  const properties: CashFlowProperty[] = rawProps.map((p) => ({
     id:      p.id,
     name:    p.name,
     city:    p.city ?? '',
-    state:   '',
-    comm:    Number(p.comm)    || 25,
-    capital: Number(p.capital) || 0,
-    address: null,
-    type:    '',
-    rooms:   0,
-    assets:  [],
+    comm:    Number(p.comm) || 25,
+    capital: investorCapitalMap[p.id] ?? 0,
   }));
 
   return <CashFlowClient reports={reports} properties={properties} />;
