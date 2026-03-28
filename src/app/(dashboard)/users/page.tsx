@@ -448,6 +448,7 @@ export default function UsersPage() {
                 {users.map((u) => {
                   const isSuperAdmin = u.role.name === 'SuperAdmin';
                   const isAdmin      = u.role.name === 'Admin';
+                  const isCoHost     = u.role.name === 'Co-Host';
                   return (
                     <tr key={u.id}>
                       <td style={{ fontWeight: 600 }}>{u.username}</td>
@@ -456,9 +457,9 @@ export default function UsersPage() {
                           display: 'inline-flex', alignItems: 'center',
                           padding: '3px 10px', borderRadius: '20px',
                           fontSize: '11px', fontWeight: 600,
-                          background: isSuperAdmin ? 'var(--orp)' : isAdmin ? 'rgba(99,102,241,.1)' : 'var(--s2)',
-                          color:      isSuperAdmin ? 'var(--or)'  : isAdmin ? '#6366F1'             : 'var(--t2)',
-                          border: `1px solid ${isSuperAdmin ? 'var(--or)' : isAdmin ? 'rgba(99,102,241,.25)' : 'var(--bdr)'}`,
+                          background: isSuperAdmin ? 'var(--orp)'            : isAdmin   ? 'rgba(99,102,241,.1)'  : isCoHost ? 'rgba(20,184,166,.1)'  : 'var(--s2)',
+                          color:      isSuperAdmin ? 'var(--or)'             : isAdmin   ? '#6366F1'              : isCoHost ? '#0D9488'              : 'var(--t2)',
+                          border: `1px solid ${isSuperAdmin ? 'var(--or)' : isAdmin ? 'rgba(99,102,241,.25)' : isCoHost ? 'rgba(20,184,166,.25)' : 'var(--bdr)'}`,
                         }}>
                           {isSuperAdmin && '⚙ '}{u.role.name}
                         </span>
