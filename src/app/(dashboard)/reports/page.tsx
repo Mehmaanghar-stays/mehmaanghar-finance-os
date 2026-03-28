@@ -1,14 +1,8 @@
 // src/app/(dashboard)/reports/page.tsx
 //
 // Reports page — Server Component shell.
-// Fetches Report rows + Property rows; passes them to <ReportsClient />.
-//
-// HTML source: <div class="page" id="page-reports"> + rndReports()
-//
-// Monthly Entry is now a standalone page at /monthlyentry.
-// The canMonthlyEntry prop and related permission check have been removed.
-// Properties are still fetched here for the snapshot detail panel's property
-// name display and commission lookup.
+// Fetches Report rows + Property rows (id, name, city, comm, effectiveComm).
+// effectiveComm used in snapshot panel commission label.
 
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -16,11 +10,10 @@ import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { getRolePermissions } from '@/lib/permissions';
 import { ReportsClient } from './ReportsClient';
+import type { ReportsProperty } from './ReportsClient';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
 
 export default async function ReportsPage() {
-  // ── Session + permissions ─────────────────────────────────────────────────
   const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
   const cookieStore = await cookies();
   const token       = cookieStore.get(cookieName)?.value ?? '';
@@ -62,29 +55,24 @@ export default async function ReportsPage() {
     }];
   });
 
-  // ── Fetch properties (for snapshot detail panel — property name + commission) ──
+  // ── Fetch properties — id, name, city, comm + broker for effectiveComm ────
   const rawProps = await prisma.property.findMany({
-    select: { id: true, name: true, address: true, city: true, state: true, comm: true, capital: true, type: true, rooms: true, assets: true },
+    select: { id: true, name: true, city: true, comm: true, broker_pct: true, broker_public: true },
     orderBy: { name: 'asc' },
   });
 
-  const properties: SerializableProperty[] = rawProps.map((p) => ({
-    id:      p.id,
-    name:    p.name,
-    city:    p.city ?? '',
-    state:   p.state ?? '',
-    comm:    Number(p.comm) || 25,
-    capital: Number(p.capital) || 0,
-    address: p.address,
-    type:    p.type ?? '',
-    rooms:   Number(p.rooms) || 0,
-    assets:  (p.assets as SerializableProperty['assets']) ?? [],
-  }));
+  const properties: ReportsProperty[] = rawProps.map((p) => {
+    const comm      = Number(p.comm)       || 25;
+    const brokerPct = Number(p.broker_pct) || 0;
+    const brokerPub = p.broker_public ?? false;
+    return {
+      id:            p.id,
+      name:          p.name,
+      city:          p.city ?? '',
+      comm,
+      effectiveComm: brokerPub ? comm + brokerPct : comm,
+    };
+  });
 
-  return (
-    <ReportsClient
-      reports={reports}
-      properties={properties}
-    />
-  );
+  return <ReportsClient reports={reports} properties={properties} />;
 }

@@ -16,7 +16,7 @@
 //               Per-row ↓ now generates CSV client-side immediately.
 //               Empty state has a "Regenerate" button.
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
@@ -26,7 +26,19 @@ import type { RepRow } from '@/lib/period';
 import { Pagination } from '@/components/ui/Pagination';
 import { DetailPanel } from '@/components/ui/DetailPanel';
 import { useToast } from '@/components/ui/Toast';
-import type { SerializableReport, SerializableProperty } from '../dashboard/page';
+import type { SerializableReport } from '../dashboard/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — reports only needs id, name, city, comm, effectiveComm
+// ---------------------------------------------------------------------------
+
+export interface ReportsProperty {
+  id:            string;
+  name:          string;
+  city:          string;
+  comm:          number;
+  effectiveComm: number;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -117,7 +129,7 @@ const EXPORT_CARDS = [
 
 interface ReportsClientProps {
   reports: SerializableReport[];
-  properties: SerializableProperty[];
+  properties: ReportsProperty[];
 }
 
 // ---------------------------------------------------------------------------
@@ -187,6 +199,9 @@ export function ReportsClient({
   const totalPages = Math.max(1, Math.ceil(sortedReps.length / PAGE_SIZE));
   const safePage   = Math.min(page, totalPages);
   const paginated  = sortedReps.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  // Reset to page 1 whenever filtered results change
+  useEffect(() => { setPage(1); }, [sortedReps.length]);
 
   // ── Toggle list ───────────────────────────────────────────────────────────
   function handleToggleList() {
@@ -392,21 +407,21 @@ function ReportSnapshot({
   propMap,
 }: {
   rep: SerializableReport;
-  propMap: Record<string, SerializableProperty>;
+  propMap: Record<string, ReportsProperty>;
 }) {
   const prop = propMap[rep.pid];
 
   const KPI_ROWS = [
-    { l: 'Revenue',                           v: fIN(rep.rev),                                                      c: 'var(--tx)' },
-    { l: 'Expenses',                          v: fIN(rep.exp),                                                      c: 'var(--rd)' },
-    { l: 'Op. Profit',                        v: fIN(rep.opProfit),                                                 c: 'var(--gr)' },
-    { l: `Commission (${prop?.comm ?? 25}%)`, v: fIN(rep.commission),                                               c: 'var(--or)' },
-    { l: 'Investor Net',                      v: fIN(rep.invProfit),                                                c: 'var(--bl)' },
-    { l: 'Nights',                            v: String(rep.nights ?? 0),                                          c: 'var(--tx)' },
-    { l: 'Occupancy',                         v: (rep.occ ?? 0).toFixed(1) + '%',                                  c: 'var(--go)' },
-    { l: 'ROI',                               v: rep.roi !== null ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',       c: 'var(--or)' },
-    { l: 'ADR',                               v: fIN(rep.adr ?? 0),                                                c: 'var(--tx)' },
-    { l: 'RevPAR',                            v: fIN(rep.revpar ?? 0),                                             c: 'var(--gr)' },
+    { l: 'Revenue',                                      v: fIN(rep.rev),                                                c: 'var(--tx)' },
+    { l: 'Expenses',                                     v: fIN(rep.exp),                                                c: 'var(--rd)' },
+    { l: 'Op. Profit',                                   v: fIN(rep.opProfit),                                           c: 'var(--gr)' },
+    { l: `Commission (${prop?.effectiveComm ?? 25}%)`,   v: fIN(rep.commission),                                         c: 'var(--or)' },
+    { l: 'Investor Net',                                 v: fIN(rep.invProfit),                                          c: 'var(--bl)' },
+    { l: 'Nights',                                       v: String(rep.nights ?? 0),                                     c: 'var(--tx)' },
+    { l: 'Occupancy',                                    v: (rep.occ ?? 0).toFixed(1) + '%',                             c: 'var(--go)' },
+    { l: 'ROI',                                          v: rep.roi !== null ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',  c: 'var(--or)' },
+    { l: 'ADR',                                          v: fIN(rep.adr ?? 0),                                           c: 'var(--tx)' },
+    { l: 'RevPAR',                                       v: fIN(rep.revpar ?? 0),                                        c: 'var(--gr)' },
   ];
 
   return (
@@ -468,9 +483,3 @@ function ReportSnapshot({
     </>
   );
 }
-//
-//  1. Collapsible report list (toggleRepList + rndReports)
-//     - Period-filtered, sorted newest-first, paginated (PAGE_SIZE=20)
-//     - Rows: property name + period, KPI meta line, 👁 snapshot + ↓ CSV
-//     - Snapshot opens a DetailPanel with the full calcF() output
-//
