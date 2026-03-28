@@ -236,7 +236,9 @@ export function InvestorsClient({
       exp:        panelAllReps.reduce((s, r) => s + r.exp, 0),
       opProfit:   panelAllReps.reduce((s, r) => s + r.opProfit, 0),
       commission: panelAllReps.reduce((s, r) => s + r.commission, 0),
-      // Investor net = only their share of the investor pool
+      // Investor net = invProfit × (sharePct / 100)
+  // sharePct = this investor's % of the investor pool (e.g. 25 for equal 4-way split)
+  // NOT % of total op profit. 4 investors × 25% = 100% of the pool.
       invProfit:  panelAllReps.reduce((s, r) => s + r.invProfit * shareFraction, 0),
     };
     return agg;
@@ -253,7 +255,7 @@ export function InvestorsClient({
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <button className="btn btn-g btn-sm" onClick={() => {
               downloadCsv(
-                ['Investor', 'Contact', 'Property', 'Capital', 'Profit Share%', 'Net Payout (Period)', 'ROI'],
+                ['Investor', 'Contact', 'Property', 'Capital', 'Pool Share%', 'Net Payout (Period)', 'ROI'],
                 investors.map((inv) => {
                   const prop   = propMap[inv.propertyId];
                   const payout = invPayoutMap[inv.id] ?? 0;
@@ -274,7 +276,7 @@ export function InvestorsClient({
               const { exportTablePdf } = await import('@/components/layout/exportPdf');
               await exportTablePdf({
                 title: 'Investor Ledger',
-                headers: ['Investor', 'Property', 'Capital', 'Profit Share%', 'Net Payout', 'ROI'],
+                headers: ['Investor', 'Property', 'Capital', 'Pool Share%', 'Net Payout', 'ROI'],
                 rows: investors.map((inv) => {
                   const prop   = propMap[inv.propertyId];
                   const payout = invPayoutMap[inv.id] ?? 0;
@@ -317,7 +319,7 @@ export function InvestorsClient({
                   <th>Investor</th>
                   <th>Properties</th>
                   <th>Capital</th>
-                  <th>Profit Share%</th>
+                  <th title="% of investor pool (not total profit)">Pool Share%</th>
                   <th>Net Payout</th>
                   <th>ROI</th>
                   {(canEdit || canDelete) && <th>Actions</th>}
@@ -444,7 +446,7 @@ export function InvestorsClient({
             ? [
                 panelInv.contact || null,
                 panelInv.capital ? `Capital: ${fF(panelInv.capital)}` : null,
-                panelInv.sharePct ? `Profit Share: ${panelInv.sharePct}%` : null,
+                panelInv.sharePct ? `Pool Share: ${panelInv.sharePct}% of inv. pool` : null,
               ].filter(Boolean).join(' · ')
             : ''
         }

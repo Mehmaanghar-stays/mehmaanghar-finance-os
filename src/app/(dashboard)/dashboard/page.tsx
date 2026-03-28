@@ -24,7 +24,9 @@ export interface SerializableReport {
   roomRev: number;
   exp: number;
   opProfit: number;
-  commission: number;
+  commission: number;  // total commission (MHG + broker when public)
+  mgComm: number;      // MHG-only portion
+  brokerComm: number;  // broker portion (0 when broker is private)
   invProfit: number;
   nights: number;
   days: number;
@@ -80,6 +82,8 @@ export default async function DashboardPage() {
       exp:        Number(d.exp ?? 0),
       opProfit:   Number(d.opProfit ?? 0),
       commission: Number(d.commission ?? 0),
+      mgComm:     Number(d.mgComm     ?? d.commission ?? 0),
+      brokerComm: Number(d.brokerComm  ?? 0),
       invProfit:  Number(d.invProfit ?? 0),
       nights:     Number(d.nights ?? 0),
       days:       Number(d.days ?? 0),

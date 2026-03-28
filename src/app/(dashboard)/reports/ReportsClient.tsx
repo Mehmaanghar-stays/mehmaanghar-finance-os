@@ -124,7 +124,14 @@ async function pdfDownload(rep: SerializableReport, propName: string) {
     ['Revenue',          fIN(rep.rev)],
     ['Expenses',         fIN(rep.exp)],
     ['Operating Profit', fIN(rep.opProfit)],
-    ['Commission',       fIN(rep.commission)],
+    // Show commission breakdown when broker cut is present
+    ...(rep.brokerComm > 0
+      ? [
+          ['MHG Mgmt Commission', fIN(rep.mgComm)] as [string, string],
+          ['Brokerage Commission', fIN(rep.brokerComm)] as [string, string],
+        ]
+      : [['Commission', fIN(rep.commission)] as [string, string]]
+    ),
     ['Investor Net',     fIN(rep.invProfit)],
     ['Nights',           String(rep.nights ?? 0)],
     ['Occupancy',        (rep.occ ?? 0).toFixed(1) + '%'],
@@ -589,17 +596,30 @@ function ReportSnapshot({
 }) {
   const prop = propMap[rep.pid];
 
+  const hasBroker = (rep.brokerComm ?? 0) > 0;
+  const mgCommPct     = prop?.comm          ?? 0;
+  const brokerCommPct = (prop?.effectiveComm ?? 0) - mgCommPct;
+
   const KPI_ROWS = [
-    { l: 'Revenue',                                      v: fIN(rep.rev),                                                c: 'var(--tx)' },
-    { l: 'Expenses',                                     v: fIN(rep.exp),                                                c: 'var(--rd)' },
-    { l: 'Op. Profit',                                   v: fIN(rep.opProfit),                                           c: 'var(--gr)' },
-    { l: `Commission (${prop?.effectiveComm ?? 25}%)`,   v: fIN(rep.commission),                                         c: 'var(--or)' },
-    { l: 'Investor Net',                                 v: fIN(rep.invProfit),                                          c: 'var(--bl)' },
-    { l: 'Nights',                                       v: String(rep.nights ?? 0),                                     c: 'var(--tx)' },
-    { l: 'Occupancy',                                    v: (rep.occ ?? 0).toFixed(1) + '%',                             c: 'var(--go)' },
-    { l: 'ROI',                                          v: rep._hasCapital ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',  c: 'var(--or)' },
-    { l: 'ADR',                                          v: fIN(rep.adr ?? 0),                                           c: 'var(--tx)' },
-    { l: 'RevPAR',                                       v: fIN(rep.revpar ?? 0),                                        c: 'var(--gr)' },
+    { l: 'Revenue',    v: fIN(rep.rev),      c: 'var(--tx)' },
+    { l: 'Expenses',   v: fIN(rep.exp),      c: 'var(--rd)' },
+    { l: 'Op. Profit', v: fIN(rep.opProfit), c: 'var(--gr)' },
+    // Commission breakdown — split when a public broker cut exists
+    ...(hasBroker
+      ? [
+          { l: `MHG Mgmt (${mgCommPct}%)`,      v: fIN(rep.mgComm),     c: 'var(--or)' },
+          { l: `Brokerage (${brokerCommPct}%)`,  v: fIN(rep.brokerComm), c: 'var(--go)' },
+        ]
+      : [
+          { l: `Commission (${prop?.effectiveComm ?? 25}%)`, v: fIN(rep.commission), c: 'var(--or)' },
+        ]
+    ),
+    { l: 'Investor Net', v: fIN(rep.invProfit),                                              c: 'var(--bl)' },
+    { l: 'Nights',       v: String(rep.nights ?? 0),                                         c: 'var(--tx)' },
+    { l: 'Occupancy',    v: (rep.occ ?? 0).toFixed(1) + '%',                                 c: 'var(--go)' },
+    { l: 'ROI',          v: rep._hasCapital ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',       c: 'var(--or)' },
+    { l: 'ADR',          v: fIN(rep.adr ?? 0),                                               c: 'var(--tx)' },
+    { l: 'RevPAR',       v: fIN(rep.revpar ?? 0),                                            c: 'var(--gr)' },
   ];
 
   return (

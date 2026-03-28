@@ -426,7 +426,7 @@ export function DashboardClient({ reports, properties, initialExpenseGoal, goalM
         <MetricCard accent label="Total Revenue"       value={fI(agg!.rev)}       sub="Gross booking revenue"                           iconText="₹"  iconVariant="w" />
         <MetricCard       label="Operating Profit"     value={fI(agg!.opProfit)}   sub={agg!.margin + '% of revenue'}                    iconText="✓"  iconVariant="g" />
         <MetricCard       label="Total Expenses"       value={fI(agg!.exp)}        sub={agg!.rev > 0 ? expRatio + '% of revenue' : ''}   iconText="↓"  iconVariant="r" />
-        <MetricCard       label="MehmanGhar Commission" value={agg!.opProfit > 0 ? fI(agg!.commission) : '₹0.00'} sub={agg!.opProfit > 0 ? agg!.commPct + '% of op. profit' : 'No commission on loss'} iconText="%" iconVariant="o" />
+        <MetricCard       label="Commission" value={agg!.opProfit > 0 ? fI(agg!.commission) : '₹0.00'} sub={agg!.opProfit > 0 ? agg!.commPct + '% of op. profit' : 'No commission on loss'} iconText="%" iconVariant="o" />
         <MetricCard       label="Investor Payout"      value={fI(agg!.invProfit)}  sub={agg!.invPct + '% of op. profit'}                 iconText="→"  iconVariant="b" />
         <MetricCard       label="Occupancy"            value={agg!.occ + '%'}      sub={agg!.occ >= 75 ? '✓ On target' : '⚠ Below 75% target'} iconText="◉" iconVariant="go" />
         <MetricCard       label="ADR"                  value={fIN(agg!.adr ?? 0)}  sub="Avg Daily Rate (room only)"                      iconText="⌂"  iconVariant="b" />

@@ -60,6 +60,8 @@ export default async function InsightsPage() {
       exp:        Number(d.exp        ?? 0),
       opProfit:   Number(d.opProfit   ?? 0),
       commission: Number(d.commission ?? 0),
+      mgComm:     Number(d.mgComm     ?? d.commission ?? 0),
+      brokerComm: Number(d.brokerComm  ?? 0),
       invProfit:  Number(d.invProfit  ?? 0),
       nights:     Number(d.nights     ?? 0),
       days:       Number(d.days       ?? 0),

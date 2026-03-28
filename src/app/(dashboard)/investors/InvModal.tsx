@@ -132,7 +132,7 @@ export function InvModal({
           />
         </div>
         <div className={styles.fl}>
-          <label>Profit Share %</label>
+          <label>Pool Share % <span style={{ fontWeight: 400, color: 'var(--t3)', fontSize: '10.5px' }}>— % of investor pool (e.g. 25 for equal 4-way split)</span></label>
           <input
             className={styles.fi}
             type="number"
