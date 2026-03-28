@@ -15,6 +15,7 @@ const nextConfig: NextConfig = {
     'pako',
     'fontkit',
     'linebreak',
+    'sharp',
   ],
   turbopack: {},
 };
