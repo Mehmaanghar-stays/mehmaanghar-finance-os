@@ -253,10 +253,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const stream = await pdf(doc).toBuffer();
+    const buffer = await pdf(doc as Parameters<typeof pdf>[0]).toBuffer();
     const filename = 'filename' in body ? body.filename : 'export.pdf';
 
-    return new NextResponse(stream, {
+    return new NextResponse(buffer as unknown as BodyInit, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

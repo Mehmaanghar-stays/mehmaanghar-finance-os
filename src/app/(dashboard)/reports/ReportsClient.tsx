@@ -218,7 +218,7 @@ export function ReportsClient({
 
   // ── Period-filtered + sorted reports ─────────────────────────────────────
   const filteredReps = useMemo(
-    () => getFilteredReps(reports as RepRow[], propById, pageFilterState),
+    () => getFilteredReps(reports as RepRow[], propById, pageFilterState) as SerializableReport[],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [reports, propById, pageFilterState,
      periodState.cPType, periodState.cM, periodState.cY,

@@ -511,7 +511,7 @@ export function InvestorsClient({
 function InvReportHistory({
   reps, MS, sharePct,
 }: {
-  reps: SerializableReport[];
+  reps: RepRow[];
   MS: string[];
   sharePct: number;
 }) {

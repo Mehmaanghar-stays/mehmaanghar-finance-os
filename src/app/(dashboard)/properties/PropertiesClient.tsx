@@ -595,15 +595,9 @@ export function PropertiesClient({
 // ReportHistory — collapsible, with correct N/A ROI display
 // ---------------------------------------------------------------------------
 
-function ReportHistory({ reps, capital }: { reps: SerializableReport[]; capital: number }) {
+function ReportHistory({ reps, capital }: { reps: RepRow[]; capital: number }) {
   const [open, setOpen] = useState(false);
   const MS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const fI = (n: number) => {
-    const v = Math.abs(n);
-    if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
-    if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
-    return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
-  };
 
   return (
     <div>

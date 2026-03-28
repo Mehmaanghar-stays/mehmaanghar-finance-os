@@ -292,7 +292,6 @@ export function TopbarActions({ role }: TopbarActionsProps) {
         onClose={() => setPropModalOpen(false)}
         editId={null}
         initialValues={undefined}
-        knownCities={[]}
         onSave={handleSaveProperty}
         isSaving={isSavingProp}
       />
