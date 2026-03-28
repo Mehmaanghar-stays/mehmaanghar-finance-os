@@ -25,10 +25,21 @@ import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD, getFYMonths } from '@/lib/period';
 import type { RepRow, PeriodState } from '@/lib/period';
 import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
-import { aggExpCats, expLabel, expColor } from './expUtils';
+import { aggExpCats, expLabel, expColor, EXP_DEFAULT_CATS } from './expUtils';
 import type { ExpTrendPoint } from './ExpenseCharts';
 import type { SerializableReport } from '../dashboard/page';
-import type { SerializableProperty } from '../properties/page';
+
+// ---------------------------------------------------------------------------
+// Minimal property type — expenses only needs id, name, city, comm, capital
+// ---------------------------------------------------------------------------
+
+export interface ExpensesProperty {
+  id:      string;
+  name:    string;
+  city:    string;
+  comm:    number;
+  capital: number;
+}
 
 const ExpenseCharts = dynamic(
   () => import('./ExpenseCharts').then((m) => ({ default: m.ExpenseCharts })),
@@ -158,7 +169,7 @@ function genExpInsights(
   a: AggResult,
   cats: Record<string, number>,
   prevA: AggResult | null,
-  propMap: Record<string, SerializableProperty>,
+  propMap: Record<string, ExpensesProperty>,
 ): InsightItem[] {
   const ins: InsightItem[] = [];
   const expPct = a.rev > 0 ? +((a.exp / a.rev) * 100).toFixed(1) : 0;
@@ -216,7 +227,7 @@ function genExpInsights(
 
 interface ExpensesClientProps {
   reports: SerializableReport[];
-  properties: SerializableProperty[];
+  properties: ExpensesProperty[];
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +314,9 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
   // ── Derived values ────────────────────────────────────────────────────────
   const hasCatData    = Object.values(cats).some((v) => v > 0);
   const sortedCats    = Object.entries(cats).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-  const customKeys    = sortedCats.map(([k]) => k).filter((k) => !['electricity-bill','rent','cleaning-fees','utilities','supplies','maintenance','platform-fees','other'].includes(k));
+  // customKeys = categories not in EXP_DEFAULT_CATS (get extra colours in charts)
+  const defaultCatKeys = new Set(EXP_DEFAULT_CATS.map((c) => c.key));
+  const customKeys    = sortedCats.map(([k]) => k).filter((k) => !defaultCatKeys.has(k));
   const expPct        = agg && agg.rev > 0 ? +((agg.exp / agg.rev) * 100).toFixed(1) : 0;
   const expChange     = prevAgg && prevAgg.exp > 0 && agg
     ? +((agg.exp - prevAgg.exp) / prevAgg.exp * 100).toFixed(1)
