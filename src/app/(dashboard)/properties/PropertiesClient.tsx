@@ -5,6 +5,7 @@ import { useState, useMemo, useCallback, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD } from '@/lib/period';
@@ -283,6 +284,41 @@ export function PropertiesClient({
             </div>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
+            <button className="btn btn-g btn-sm" onClick={() => {
+              downloadCsv(
+                ['Property', 'City', 'Comm%', 'Revenue', 'Investor Net', 'Commission', 'Occupancy', 'ROI'],
+                visibleProperties.map((p) => {
+                  const lR = propAggMap[p.id];
+                  return [
+                    p.name, p.city || '', `${p.effectiveComm}%`,
+                    lR ? String(lR.rev) : '', lR ? String(lR.invProfit) : '',
+                    lR ? String(lR.commission) : '',
+                    lR ? `${(lR.occ ?? 0).toFixed(1)}%` : '',
+                    lR?.roi !== null && lR?.roi !== undefined ? `${lR.roi.toFixed(2)}%` : 'N/A',
+                  ];
+                }),
+                `mg-properties-${new Date().toISOString().slice(0, 10)}.csv`,
+              );
+            }}>↓ CSV</button>
+            <button className="btn btn-g btn-sm" onClick={async () => {
+              const { exportTablePdf } = await import('@/components/layout/exportPdf');
+              await exportTablePdf({
+                title: 'Properties',
+                headers: ['Property', 'City', 'Comm%', 'Revenue', 'Investor Net', 'Commission', 'Occupancy', 'ROI'],
+                rows: visibleProperties.map((p) => {
+                  const lR = propAggMap[p.id];
+                  return [
+                    p.name, p.city || '', `${p.effectiveComm}%`,
+                    lR ? 'Rs. ' + lR.rev.toLocaleString('en-IN') : '—',
+                    lR ? 'Rs. ' + lR.invProfit.toLocaleString('en-IN') : '—',
+                    lR ? 'Rs. ' + lR.commission.toLocaleString('en-IN') : '—',
+                    lR ? `${(lR.occ ?? 0).toFixed(1)}%` : '—',
+                    lR?.roi !== null && lR?.roi !== undefined ? `${lR.roi.toFixed(2)}%` : 'N/A',
+                  ];
+                }),
+                filename: `mg-properties-${new Date().toISOString().slice(0, 10)}.pdf`,
+              });
+            }}>↓ PDF</button>
             {canCreate && (
               <button className="btn btn-or btn-sm" onClick={handleAdd}>
                 + Add Property

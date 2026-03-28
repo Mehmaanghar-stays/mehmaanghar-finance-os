@@ -22,6 +22,7 @@ import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { getFYMonths } from '@/lib/period';
@@ -268,7 +269,33 @@ export function PayoutsClient({
           )}
           <button className="btn btn-or btn-sm" onClick={handleSyncFromReports}>↻ Sync from Reports</button>
           <button className="btn btn-g btn-sm" onClick={handleRecalcPending}>♻ Recalculate Pending</button>
-          <button className="btn btn-g btn-sm" onClick={() => toast('CSV export — Phase 6', 'in')}>Export CSV</button>
+          <button className="btn btn-g btn-sm" onClick={() => {
+            downloadCsv(
+              ['Period', 'Investor', 'Property', 'City', 'Amount Owed', 'Status', 'Paid On', 'Reference', 'Notes'],
+              filteredPays.map((p) => [
+                `${MN[p.month] ?? '?'} ${p.year}`, p.investorName, p.propertyName,
+                p.propertyCity || '', String(p.amountOwed),
+                p.status === 'paid' ? 'Paid' : 'Pending',
+                p.paidOn ?? '', p.reference ?? '', p.notes ?? '',
+              ]),
+              `mg-payouts-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
+          }}>↓ CSV</button>
+          <button className="btn btn-or btn-sm" onClick={async () => {
+            const { exportTablePdf } = await import('@/components/layout/exportPdf');
+            await exportTablePdf({
+              title: 'Investor Payout Ledger',
+              headers: ['Period', 'Investor', 'Property', 'Amount Owed', 'Status', 'Paid On', 'Reference', 'Notes'],
+              rows: filteredPays.map((p) => [
+                `${MN[p.month] ?? '?'} ${p.year}`, p.investorName,
+                p.propertyCity ? `${p.propertyName}, ${p.propertyCity}` : p.propertyName,
+                'Rs. ' + p.amountOwed.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                p.status === 'paid' ? 'Paid' : 'Pending',
+                p.paidOn ?? '—', p.reference ?? '—', p.notes ?? '—',
+              ]),
+              filename: `mg-payouts-${new Date().toISOString().slice(0, 10)}.pdf`,
+            });
+          }}>↓ PDF</button>
         </div>
       </div>
 

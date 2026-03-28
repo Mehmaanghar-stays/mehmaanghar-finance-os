@@ -14,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import type { RepRow } from '@/lib/period';
@@ -249,11 +250,53 @@ export function InvestorsClient({
       <div className="tw">
         <div className="th">
           <div className="ct">Investor Analytics</div>
-          {canCreate && (
-            <button className="btn btn-or btn-sm" onClick={handleAdd}>
-              + Add Investor
-            </button>
-          )}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button className="btn btn-g btn-sm" onClick={() => {
+              downloadCsv(
+                ['Investor', 'Contact', 'Property', 'Capital', 'Profit Share%', 'Net Payout (Period)', 'ROI'],
+                investors.map((inv) => {
+                  const prop   = propMap[inv.propertyId];
+                  const payout = invPayoutMap[inv.id] ?? 0;
+                  const roi    = investorRoi[inv.id];
+                  return [
+                    inv.name, inv.contact || '',
+                    prop?.name || '',
+                    inv.capital ? String(inv.capital) : '',
+                    inv.sharePct ? `${inv.sharePct}%` : '',
+                    String(payout),
+                    roi !== null && roi !== undefined ? `${roi}%` : 'N/A',
+                  ];
+                }),
+                `mg-investors-${new Date().toISOString().slice(0, 10)}.csv`,
+              );
+            }}>↓ CSV</button>
+            <button className="btn btn-g btn-sm" onClick={async () => {
+              const { exportTablePdf } = await import('@/components/layout/exportPdf');
+              await exportTablePdf({
+                title: 'Investor Ledger',
+                headers: ['Investor', 'Property', 'Capital', 'Profit Share%', 'Net Payout', 'ROI'],
+                rows: investors.map((inv) => {
+                  const prop   = propMap[inv.propertyId];
+                  const payout = invPayoutMap[inv.id] ?? 0;
+                  const roi    = investorRoi[inv.id];
+                  return [
+                    inv.name,
+                    prop?.name || '—',
+                    inv.capital ? 'Rs. ' + Number(inv.capital).toLocaleString('en-IN') : '—',
+                    inv.sharePct ? `${inv.sharePct}%` : '—',
+                    'Rs. ' + payout.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                    roi !== null && roi !== undefined ? `${roi}%` : 'N/A',
+                  ];
+                }),
+                filename: `mg-investors-${new Date().toISOString().slice(0, 10)}.pdf`,
+              });
+            }}>↓ PDF</button>
+            {canCreate && (
+              <button className="btn btn-or btn-sm" onClick={handleAdd}>
+                + Add Investor
+              </button>
+            )}
+          </div>
         </div>
 
         {investors.length === 0 ? (

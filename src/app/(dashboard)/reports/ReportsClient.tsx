@@ -20,6 +20,7 @@ import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import type { RepRow } from '@/lib/period';
@@ -111,6 +112,40 @@ function csvDownload(rep: SerializableReport, propName: string) {
 }
 
 // ---------------------------------------------------------------------------
+// pdfDownload — delegates to browser-only exportPdf module (no SSR)
+// ---------------------------------------------------------------------------
+
+async function pdfDownload(rep: SerializableReport, propName: string) {
+  const fIN = (n: number) => 'Rs. ' + (n || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+
+  const kpiRows: Array<[string, string]> = [
+    ['Revenue',          fIN(rep.rev)],
+    ['Expenses',         fIN(rep.exp)],
+    ['Operating Profit', fIN(rep.opProfit)],
+    ['Commission',       fIN(rep.commission)],
+    ['Investor Net',     fIN(rep.invProfit)],
+    ['Nights',           String(rep.nights ?? 0)],
+    ['Occupancy',        (rep.occ ?? 0).toFixed(1) + '%'],
+    ['ROI',              rep.roi !== null ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A'],
+    ['ADR',              fIN(rep.adr ?? 0)],
+    ['RevPAR',           fIN(rep.revpar ?? 0)],
+  ];
+
+  // Dynamic import — browser only, never SSR
+  const { exportReportPdf } = await import('@/components/layout/exportPdf');
+  await exportReportPdf({
+    propName,
+    period:   `${MN[rep.month]} ${rep.year}`,
+    kpiRows,
+    expCats:  rep.expCats ?? {},
+    channels: rep.channels ?? {},
+    filename: `mg-report-${propName.replace(/\s+/g, '-')}-${rep.year}-${String(rep.month).padStart(2, '0')}.pdf`,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Export card config — verbatim from the HTML card grid
 // ---------------------------------------------------------------------------
 
@@ -120,7 +155,7 @@ const EXPORT_CARDS = [
   { icon: '📈', title: 'Annual Report',   sub: 'Full year summary',                    type: 'annual',   btnClass: 'btn btn-or' },
   { icon: '🏦', title: 'Investor Report', sub: 'ROI & payout breakdown',               type: 'investor', btnClass: 'btn btn-or' },
   { icon: '🏙️', title: 'Consolidated',   sub: 'Multi-property combined',              type: 'monthly',  btnClass: 'btn btn-or' },
-  { icon: '📊', title: 'Raw Data',        sub: 'Full data for spreadsheet',            type: 'raw',      btnClass: 'btn btn-g'  },
+  { icon: '📊', title: 'Raw Data',        sub: 'Full data for spreadsheet',            type: 'raw',      btnClass: 'btn btn-or' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -229,27 +264,94 @@ export function ReportsClient({
     }
   }
 
-  // ── Export (server-side bulk) ─────────────────────────────────────────────
-  async function handleExport(type: string) {
-    try {
-      const res = await fetch('/api/exports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type }),
+  // ── Export cards — build clean CSV from client-side report data ──────────
+  function handleExport(type: string) {
+    // All cards use sortedReps (period-filtered) except 'raw' which uses all
+    const source = type === 'raw' ? [...reports].sort(
+      (a, b) => b.year * 100 + b.month - (a.year * 100 + a.month)
+    ) : sortedReps;
+
+    const fR = (n: number) => (n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const baseRow = (r: SerializableReport) => ({
+      Property:    propMap[r.pid]?.name ?? r.pid,
+      City:        propMap[r.pid]?.city ?? '',
+      Period:      `${MN[r.month]} ${r.year}`,
+      Revenue:     fR(r.rev),
+      Expenses:    fR(r.exp),
+      'Op. Profit':fR(r.opProfit),
+      Commission:  fR(r.commission),
+      'Inv. Net':  fR(r.invProfit),
+      Nights:      String(r.nights ?? 0),
+      'Occ%':      (r.occ ?? 0).toFixed(1) + '%',
+      ROI:         r.roi !== null ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
+      ADR:         fR(r.adr ?? 0),
+      RevPAR:      fR(r.revpar ?? 0),
+    });
+
+    let headers: string[];
+    let rows: string[][];
+    let filename: string;
+    const date = new Date().toISOString().slice(0, 10);
+
+    if (type === 'monthly') {
+      // Group by period — one section per month, all properties
+      headers = ['Property', 'City', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Nights', 'Occ%', 'ROI'];
+      rows = source.map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, row.Period, row.Revenue, row.Expenses, row['Op. Profit'], row.Commission, row['Inv. Net'], row.Nights, row['Occ%'], row.ROI];
       });
-      if (!res.ok) { toast('Export failed', 'er'); return; }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href     = url;
-      a.download = `mg-${type}-export.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      toast('Export API not available', 'er');
+      filename = `mg-monthly-report-${date}.csv`;
+
+    } else if (type === 'property') {
+      // One row per report, sorted by property then period
+      headers = ['Property', 'City', 'Comm%', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Nights', 'Occ%', 'ROI', 'ADR', 'RevPAR'];
+      rows = [...source].sort((a, b) => {
+        const pa = propMap[a.pid]?.name ?? ''; const pb = propMap[b.pid]?.name ?? '';
+        return pa.localeCompare(pb) || (b.year * 100 + b.month) - (a.year * 100 + a.month);
+      }).map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, String(propMap[r.pid]?.effectiveComm ?? '') + '%', row.Period, row.Revenue, row.Expenses, row['Op. Profit'], row.Commission, row['Inv. Net'], row.Nights, row['Occ%'], row.ROI, row.ADR, row.RevPAR];
+      });
+      filename = `mg-property-report-${date}.csv`;
+
+    } else if (type === 'annual') {
+      // Aggregate by property × year
+      const aggMap: Record<string, { rev: number; exp: number; opProfit: number; commission: number; invProfit: number; nights: number; name: string; city: string }> = {};
+      source.forEach((r) => {
+        const key = `${r.pid}__${r.year}`;
+        if (!aggMap[key]) aggMap[key] = { rev: 0, exp: 0, opProfit: 0, commission: 0, invProfit: 0, nights: 0, name: propMap[r.pid]?.name ?? r.pid, city: propMap[r.pid]?.city ?? '' };
+        aggMap[key].rev += r.rev; aggMap[key].exp += r.exp;
+        aggMap[key].opProfit += r.opProfit; aggMap[key].commission += r.commission;
+        aggMap[key].invProfit += r.invProfit; aggMap[key].nights += (r.nights ?? 0);
+      });
+      headers = ['Property', 'City', 'Year', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Total Nights'];
+      rows = Object.entries(aggMap).sort(([a], [b]) => b.localeCompare(a)).map(([key, v]) => {
+        const year = key.split('__')[1];
+        return [v.name, v.city, year, fR(v.rev), fR(v.exp), fR(v.opProfit), fR(v.commission), fR(v.invProfit), String(v.nights)];
+      });
+      filename = `mg-annual-report-${date}.csv`;
+
+    } else if (type === 'investor') {
+      // One row per report with investor net & ROI
+      headers = ['Property', 'City', 'Period', 'Revenue', 'Op. Profit', 'Commission', 'Investor Net', 'ROI'];
+      rows = source.map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, row.Period, row.Revenue, row['Op. Profit'], row.Commission, row['Inv. Net'], row.ROI];
+      });
+      filename = `mg-investor-report-${date}.csv`;
+
+    } else {
+      // raw — all fields
+      headers = ['Property', 'City', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Nights', 'Occ%', 'ROI', 'ADR', 'RevPAR'];
+      rows = source.map((r) => {
+        const row = baseRow(r);
+        return [row.Property, row.City, row.Period, row.Revenue, row.Expenses, row['Op. Profit'], row.Commission, row['Inv. Net'], row.Nights, row['Occ%'], row.ROI, row.ADR, row.RevPAR];
+      });
+      filename = `mg-raw-export-${date}.csv`;
     }
+
+    downloadCsv(headers, rows, filename);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -277,6 +379,45 @@ export function ReportsClient({
         >
           {isRegen ? '…' : '↻ Regenerate'}
         </button>
+        <button className="btn btn-g btn-sm" style={{ fontSize: '11px' }} onClick={() => {
+          downloadCsv(
+            ['Property', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Investor Net', 'Nights', 'Occupancy', 'ROI', 'ADR', 'RevPAR'],
+            sortedReps.map((r) => {
+              const propName = propMap[r.pid]?.name ?? r.pid;
+              return [
+                propName, `${MN[r.month]} ${r.year}`,
+                String(r.rev), String(r.exp), String(r.opProfit),
+                String(r.commission), String(r.invProfit),
+                String(r.nights ?? 0),
+                `${(r.occ ?? 0).toFixed(1)}%`,
+                r.roi !== null ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
+                String(r.adr ?? 0), String(r.revpar ?? 0),
+              ];
+            }),
+            `mg-reports-${new Date().toISOString().slice(0, 10)}.csv`,
+          );
+        }}>↓ CSV</button>
+        <button className="btn btn-g btn-sm" style={{ fontSize: '11px' }} onClick={async () => {
+          const { exportTablePdf } = await import('@/components/layout/exportPdf');
+          await exportTablePdf({
+            title: 'Auto-Generated Reports',
+            headers: ['Property', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Commission', 'Inv. Net', 'Occ%', 'ROI'],
+            rows: sortedReps.map((r) => {
+              const propName = propMap[r.pid]?.name ?? r.pid;
+              return [
+                propName, `${MN[r.month]} ${r.year}`,
+                'Rs. ' + r.rev.toLocaleString('en-IN'),
+                'Rs. ' + r.exp.toLocaleString('en-IN'),
+                'Rs. ' + r.opProfit.toLocaleString('en-IN'),
+                'Rs. ' + r.commission.toLocaleString('en-IN'),
+                'Rs. ' + r.invProfit.toLocaleString('en-IN'),
+                `${(r.occ ?? 0).toFixed(1)}%`,
+                r.roi !== null ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
+              ];
+            }),
+            filename: `mg-reports-${new Date().toISOString().slice(0, 10)}.pdf`,
+          });
+        }}>↓ PDF</button>
       </div>
 
       {listOpen && (
@@ -329,13 +470,21 @@ export function ReportsClient({
                       >
                         👁 View
                       </button>
-                      {/* Download — client-side CSV, no server call */}
+                      {/* Download CSV — client-side, no server call */}
                       <button
                         className="btn btn-g btn-sm"
                         title="Download CSV"
                         onClick={() => csvDownload(r, propName)}
                       >
                         ↓ CSV
+                      </button>
+                      {/* Download PDF — branded, client-side */}
+                      <button
+                        className="btn btn-g btn-sm"
+                        title="Download PDF"
+                        onClick={() => pdfDownload(r, propName)}
+                      >
+                        ↓ PDF
                       </button>
                     </div>
                   </div>
@@ -368,13 +517,42 @@ export function ReportsClient({
             <div style={{ fontSize: '11px', color: 'var(--t3)', marginBottom: '14px' }}>
               {card.sub}
             </div>
-            <button
-              className={card.btnClass}
-              style={{ width: '100%' }}
-              onClick={() => handleExport(card.type)}
-            >
-              Select &amp; Export
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                className={card.btnClass}
+                style={{ flex: 1 }}
+                onClick={() => handleExport(card.type)}
+              >
+                ↓ CSV
+              </button>
+              <button
+                className="btn btn-g"
+                style={{ flex: 1 }}
+                onClick={async () => {
+                  const source = card.type === 'raw'
+                    ? [...reports].sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month))
+                    : sortedReps;
+                  const { exportTablePdf } = await import('@/components/layout/exportPdf');
+                  await exportTablePdf({
+                    title: card.title,
+                    headers: ['Property', 'Period', 'Revenue', 'Expenses', 'Op. Profit', 'Inv. Net', 'Occ%', 'ROI'],
+                    rows: source.map((r) => [
+                      propMap[r.pid]?.name ?? '—',
+                      `${MN[r.month]} ${r.year}`,
+                      'Rs. ' + r.rev.toLocaleString('en-IN'),
+                      'Rs. ' + r.exp.toLocaleString('en-IN'),
+                      'Rs. ' + r.opProfit.toLocaleString('en-IN'),
+                      'Rs. ' + r.invProfit.toLocaleString('en-IN'),
+                      (r.occ ?? 0).toFixed(1) + '%',
+                      r.roi !== null ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
+                    ]),
+                    filename: `mg-${card.type}-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+                  });
+                }}
+              >
+                ↓ PDF
+              </button>
+            </div>
           </div>
         ))}
       </div>

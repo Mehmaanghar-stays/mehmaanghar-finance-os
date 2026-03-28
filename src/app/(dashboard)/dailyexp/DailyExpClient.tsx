@@ -20,6 +20,7 @@ import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { matchesPeriod } from '@/lib/period';
@@ -250,11 +251,35 @@ export function DailyExpClient({
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Daily Expenses
         </div>
-        {canCreate && (
-          <button className="btn btn-or btn-sm" onClick={handleAdd}>
-            + Add Expense
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button className="btn btn-g btn-sm" onClick={() => {
+            downloadCsv(
+              ['Date', 'Property', 'Category', 'Amount', 'Notes'],
+              filtered.map((e) => [
+                e.date, propMap[e.pid]?.name ?? '',
+                EXP_CATS_DAILY[e.category] ?? e.category,
+                String(e.amount), e.note || '',
+              ]),
+              `mg-daily-expenses-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
+          }}>↓ CSV</button>
+          <button className="btn btn-g btn-sm" onClick={async () => {
+            const { exportTablePdf } = await import('@/components/layout/exportPdf');
+            await exportTablePdf({
+              title: 'Daily Expenses',
+              headers: ['Date', 'Property', 'Category', 'Amount', 'Notes'],
+              rows: filtered.map((e) => [
+                e.date, propMap[e.pid]?.name ?? '—',
+                EXP_CATS_DAILY[e.category] ?? e.category,
+                'Rs. ' + e.amount.toLocaleString('en-IN', { minimumFractionDigits: 2 }), e.note || '—',
+              ]),
+              filename: `mg-daily-expenses-${new Date().toISOString().slice(0, 10)}.pdf`,
+            });
+          }}>↓ PDF</button>
+          {canCreate && (
+            <button className="btn btn-or btn-sm" onClick={handleAdd}>+ Add Expense</button>
+          )}
+        </div>
       </div>
 
       <PageFilterBar

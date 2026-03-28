@@ -20,6 +20,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { aggReps, withD, getFYMonths } from '@/lib/period';
@@ -524,6 +525,37 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
       <div className="tw" id="expPropTable" style={{ marginTop: '8px' }}>
         <div className="th">
           <div className="ct">Property Expense Comparison</div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button className="btn btn-g btn-sm" onClick={() => {
+              downloadCsv(
+                ['Property', 'City', 'Expenses', 'Revenue', 'Exp Ratio%', 'vs Portfolio%', 'Top Category'],
+                propTableData.map((p) => [
+                  p.name, p.city || '',
+                  String(p.exp), String(p.rev),
+                  `${p.ratio}%`,
+                  `${p.vs > 0 ? '+' : ''}${p.vs}%`,
+                  p.topCat ? expLabel(p.topCat[0]) : '',
+                ]),
+                `mg-expense-intel-${new Date().toISOString().slice(0, 10)}.csv`,
+              );
+            }}>↓ CSV</button>
+            <button className="btn btn-g btn-sm" onClick={async () => {
+              const { exportTablePdf } = await import('@/components/layout/exportPdf');
+              await exportTablePdf({
+                title: 'Expense Intelligence',
+                headers: ['Property', 'City', 'Expenses', 'Revenue', 'Exp Ratio', 'vs Portfolio', 'Top Category'],
+                rows: propTableData.map((p) => [
+                  p.name, p.city || '—',
+                  'Rs. ' + p.exp.toLocaleString('en-IN'),
+                  'Rs. ' + p.rev.toLocaleString('en-IN'),
+                  `${p.ratio}%`,
+                  `${p.vs > 0 ? '+' : ''}${p.vs}%`,
+                  p.topCat ? expLabel(p.topCat[0]) : '—',
+                ]),
+                filename: `mg-expense-intel-${new Date().toISOString().slice(0, 10)}.pdf`,
+              });
+            }}>↓ PDF</button>
+          </div>
         </div>
         {propTableData.length === 0 ? (
           <div style={{ padding: '20px', textAlign: 'center', color: 'var(--t3)' }}>

@@ -17,6 +17,7 @@ import { useState, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
+import { downloadCsv } from '@/lib/csvDownload';
 import { PageFilterBar } from '@/components/layout/PageFilterBar';
 import type { FilterOption } from '@/components/layout/PageFilterBar';
 import { matchesPeriod } from '@/lib/period';
@@ -231,6 +232,35 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <div className="page-hdr">
         <div className="stl" style={{ marginBottom: 0 }}><div className="d" />Guest Intelligence</div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button className="btn btn-g btn-sm" onClick={() => {
+            downloadCsv(
+              ['Guest', 'Phone', 'Email', 'Tags', 'Stays (all-time)', 'Nights (all-time)', 'Period Spend', 'Lifetime CLV', 'Rating', 'Last Visit'],
+              filteredGuests.map(({ g, tags, periodSpend }) => [
+                g.name, g.phone || '', g.email || '', tags.join(', '),
+                String(g.allTimeStays), String(g.allTimeNights),
+                String(periodSpend), String(g.allTimeSpend),
+                g.avgRating ? String(g.avgRating) : '', g.lastVisit || '',
+              ]),
+              `mg-guests-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
+          }}>↓ CSV</button>
+          <button className="btn btn-g btn-sm" onClick={async () => {
+            const { exportTablePdf } = await import('@/components/layout/exportPdf');
+            await exportTablePdf({
+              title: 'Guest CRM',
+              headers: ['Guest', 'Phone', 'Tags', 'Stays', 'Nights', 'Period Spend', 'Lifetime CLV', 'Rating', 'Last Visit'],
+              rows: filteredGuests.map(({ g, tags, periodSpend }) => [
+                g.name, g.phone || '—', tags.join(', ') || '—',
+                String(g.allTimeStays), String(g.allTimeNights),
+                'Rs. ' + periodSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                'Rs. ' + g.allTimeSpend.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                g.avgRating ? String(g.avgRating) : '—', g.lastVisit || '—',
+              ]),
+              filename: `mg-guests-${new Date().toISOString().slice(0, 10)}.pdf`,
+            });
+          }}>↓ PDF</button>
+        </div>
       </div>
 
       <PageFilterBar

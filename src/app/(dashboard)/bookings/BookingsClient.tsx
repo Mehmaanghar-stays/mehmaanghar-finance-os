@@ -18,6 +18,7 @@ import type { PeriodState } from '@/lib/period';
 import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/components/ui/Toast';
+import { downloadCsv } from '@/lib/csvDownload';
 import { BookingModal } from './BookingModal';
 import type { BookingFormValues, BookingSavePayload } from './BookingModal';
 // ---------------------------------------------------------------------------
@@ -333,9 +334,35 @@ export function BookingsClient({
         <div className="stl" style={{ marginBottom: 0 }}>
           <div className="d" />Bookings
         </div>
-        {canCreate && (
-          <button className="btn btn-or btn-sm" onClick={handleAdd}>+ Add Booking</button>
-        )}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button className="btn btn-g btn-sm" onClick={() => {
+            downloadCsv(
+              ['Check-in', 'Check-out', 'Property', 'Guest', 'Nights', 'Source', 'Type', 'Revenue', 'Room Amount', 'Status', 'Notes'],
+              filtered.map((b) => [
+                b.checkIn, b.checkOut, b.propertyName, b.guestName || '',
+                String(b.nights), b.platform, b.bookingType === 'event' ? 'Event' : 'Stay',
+                String(b.revenue), String(b.roomAmount), b.status, b.notes || '',
+              ]),
+              `mg-bookings-${new Date().toISOString().slice(0, 10)}.csv`,
+            );
+          }}>↓ CSV</button>
+          <button className="btn btn-g btn-sm" onClick={async () => {
+            const { exportTablePdf } = await import('@/components/layout/exportPdf');
+            await exportTablePdf({
+              title: 'Bookings',
+              headers: ['Check-in', 'Check-out', 'Property', 'Guest', 'Nights', 'Source', 'Type', 'Amount', 'Status'],
+              rows: filtered.map((b) => [
+                b.checkIn, b.checkOut, b.propertyName, b.guestName || '—',
+                String(b.nights), b.platform, b.bookingType === 'event' ? 'Event' : 'Stay',
+                'Rs. ' + b.revenue.toLocaleString('en-IN'), b.status,
+              ]),
+              filename: `mg-bookings-${new Date().toISOString().slice(0, 10)}.pdf`,
+            });
+          }}>↓ PDF</button>
+          {canCreate && (
+            <button className="btn btn-or btn-sm" onClick={handleAdd}>+ Add Booking</button>
+          )}
+        </div>
       </div>
 
       <PageFilterBar
