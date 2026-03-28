@@ -370,13 +370,20 @@ export function DashboardClient({ reports, properties, initialExpenseGoal, goalM
 
   // ── Derived display values ────────────────────────────────────────────────
   const totalNights = filteredReps.reduce((s: number, r: RepRow) => s + (r.nights ?? 0), 0);
-  const activeProps = new Set(filteredReps.map((r: RepRow) => r.pid)).size;
+  // filteredPids — set of property IDs visible in current filter (reused below)
+  const filteredPids = useMemo(
+    () => new Set(filteredReps.map((r: RepRow) => r.pid)),
+    [filteredReps],
+  );
+  const activeProps = filteredPids.size;
 
-  // Secured assets total — sum of all asset amounts across all properties
-  const securedAssetsTotal = properties.reduce((sum, p) => {
-    const propAssets = p.assets ?? [];
-    return sum + propAssets.reduce((s, a) => s + (a.amount ?? 0), 0);
-  }, 0);
+  // Secured assets total — sum only for properties visible in the current filter
+  const securedAssetsTotal = properties
+    .filter((p) => filteredPids.has(p.id))
+    .reduce((sum, p) => {
+      const propAssets = p.assets ?? [];
+      return sum + propAssets.reduce((s, a) => s + (a.amount ?? 0), 0);
+    }, 0);
 
   // Expense ratio for info card
   const expRatio = agg && agg.rev > 0

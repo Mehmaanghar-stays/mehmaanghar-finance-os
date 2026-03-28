@@ -377,14 +377,9 @@ export function PropertiesClient({
                         {/* City */}
                         <td>{p.city || '—'}</td>
 
-                        {/* Comm% — shows effectiveComm when broker is public */}
+                        {/* Comm% — shows effectiveComm; broker detail kept private in table */}
                         <td>
                           <span className="pill o">{p.effectiveComm}%</span>
-                          {hasBroker && (
-                            <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '2px' }}>
-                              +{p.broker_pct}% {p.broker_name}
-                            </div>
-                          )}
                         </td>
 
                         {/* Revenue */}
