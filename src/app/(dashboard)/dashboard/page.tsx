@@ -90,19 +90,28 @@ export default async function DashboardPage() {
     }];
   });
 
-  // Fetch properties for lookup (name, city, comm, capital).
+  // Fetch properties for lookup (name, city, comm, assets).
   const rawProperties = await prisma.property.findMany({
-    select: { id: true, name: true, city: true, comm: true, capital: true, assets: true },
+    select: { id: true, name: true, city: true, comm: true, assets: true },
     orderBy: { name: 'asc' },
   });
 
+  // Capital base = sum of investor.capital per property — same as regenReports and properties page.
+  const rawInvestorCapitals = await prisma.investor.findMany({
+    select: { property_id: true, capital: true },
+  });
+  const investorCapitalMap: Record<string, number> = {};
+  for (const inv of rawInvestorCapitals) {
+    investorCapitalMap[inv.property_id] = (investorCapitalMap[inv.property_id] ?? 0) + Number(inv.capital);
+  }
+
   const properties: SerializableProperty[] = rawProperties.map((p) => ({
-    id: p.id,
-    name: p.name,
-    city: p.city,
-    comm: Number(p.comm),
-    capital: Number(p.capital),
-    assets: (p.assets as Array<{ name: string; amount: number; type: string }>) ?? [],
+    id:      p.id,
+    name:    p.name,
+    city:    p.city,
+    comm:    Number(p.comm),
+    capital: investorCapitalMap[p.id] ?? 0,
+    assets:  (p.assets as Array<{ name: string; amount: number; type: string }>) ?? [],
   }));
 
   // Fetch expense goal for current month from UtilsSetting.

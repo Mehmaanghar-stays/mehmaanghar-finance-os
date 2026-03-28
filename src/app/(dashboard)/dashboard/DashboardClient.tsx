@@ -11,7 +11,7 @@
 //   - .crow.r2: RevenueChart + CommissionDonut
 //   - .crow.r3: OccupancyChart + Booking Channels Donut + Property Revenue bar
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePeriod } from '@/hooks/usePeriod';
 import { usePageFilters } from '@/hooks/usePageFilters';
@@ -291,10 +291,13 @@ export function DashboardClient({ reports, properties, initialExpenseGoal, goalM
     () => Object.fromEntries(properties.map((p) => [p.id, p])),
     [properties],
   );
-  const propById = (pid: string): PropLookup | null =>
-    propMap[pid]
-      ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
-      : null;
+  const propById = useCallback(
+    (pid: string): PropLookup | null =>
+      propMap[pid]
+        ? { id: pid, city: propMap[pid].city, comm: propMap[pid].comm }
+        : null,
+    [propMap],
+  );
 
   const allReps = reports as RepRow[];
 
@@ -307,7 +310,7 @@ export function DashboardClient({ reports, properties, initialExpenseGoal, goalM
   const filteredReps = useMemo(
     () => getFilteredReps(allReps, propById, pageFilterState),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allReps, propMap, pageFilterState,
+    [allReps, propById, pageFilterState,
      periodState.cPType, periodState.cM, periodState.cY,
      periodState.cQ, periodState.cFY, periodState.cDateFrom, periodState.cDateTo,
      periodState.cDay, periodState.cWeek],
