@@ -361,7 +361,7 @@ export function InvestorsClient({
 
                       {/* Net payout (period-filtered) */}
                       <td style={{ fontWeight: 800, color: 'var(--gr)' }}>
-                        {fI(payout)}
+                        {fF(payout)}
                       </td>
 
                       {/* ROI — verbatim colour logic from HTML */}
@@ -468,11 +468,11 @@ export function InvestorsClient({
                   All-Time Performance
                 </div>
                 <div className="dp-kpi">
-                  <div className="dp-k"><div className="dp-kl">Total Revenue</div><div className="dp-kv">{fI(panelAgg.rev)}</div></div>
-                  <div className="dp-k"><div className="dp-kl">Total Expenses</div><div className="dp-kv" style={{ color: 'var(--rd)' }}>{fI(panelAgg.exp)}</div></div>
-                  <div className="dp-k"><div className="dp-kl">Op. Profit</div><div className="dp-kv" style={{ color: 'var(--gr)' }}>{fI(panelAgg.opProfit)}</div></div>
-                  <div className="dp-k"><div className="dp-kl">Commission</div><div className="dp-kv" style={{ color: 'var(--or)' }}>{fI(panelAgg.commission)}</div></div>
-                  <div className="dp-k"><div className="dp-kl">Investor Net</div><div className="dp-kv" style={{ color: 'var(--bl)' }}>{fI(panelAgg.invProfit)}</div></div>
+                  <div className="dp-k"><div className="dp-kl">Total Revenue</div><div className="dp-kv">{fF(panelAgg.rev)}</div></div>
+                  <div className="dp-k"><div className="dp-kl">Total Expenses</div><div className="dp-kv" style={{ color: 'var(--rd)' }}>{fF(panelAgg.exp)}</div></div>
+                  <div className="dp-k"><div className="dp-kl">Op. Profit</div><div className="dp-kv" style={{ color: 'var(--gr)' }}>{fF(panelAgg.opProfit)}</div></div>
+                  <div className="dp-k"><div className="dp-kl">Commission</div><div className="dp-kv" style={{ color: 'var(--or)' }}>{fF(panelAgg.commission)}</div></div>
+                  <div className="dp-k"><div className="dp-kl">Investor Net</div><div className="dp-kv" style={{ color: 'var(--bl)' }}>{fF(panelAgg.invProfit)}</div></div>
                   <div className="dp-k">
                     <div className="dp-kl">ROI</div>
                     <div className="dp-kv" style={{
@@ -516,12 +516,7 @@ function InvReportHistory({
   sharePct: number;
 }) {
   const [open, setOpen] = useState(false);
-  const fI = (n: number) => {
-    const v = Math.abs(n);
-    if (v >= 100000) return (n < 0 ? '-' : '') + '₹' + (v / 100000).toFixed(2) + 'L';
-    if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
-    return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
-  };
+  // fF from module scope used for exact .00 precision in table cells
   const fraction = (sharePct || 0) / 100;
 
   return (
@@ -550,10 +545,10 @@ function InvReportHistory({
               {reps.map((r) => (
                 <tr key={r.id}>
                   <td>{MS[r.month]} {r.year}</td>
-                  <td>{fI(r.rev)}</td>
-                  <td style={{ color: 'var(--gr)' }}>{fI(r.opProfit)}</td>
-                  <td style={{ color: 'var(--or)' }}>{fI(r.commission)}</td>
-                  <td style={{ color: 'var(--bl)' }}>{fI(r.invProfit * fraction)}</td>
+                  <td>{fF(r.rev)}</td>
+                  <td style={{ color: 'var(--gr)' }}>{fF(r.opProfit)}</td>
+                  <td style={{ color: 'var(--or)' }}>{fF(r.commission)}</td>
+                  <td style={{ color: 'var(--bl)' }}>{fF(r.invProfit * fraction)}</td>
                   <td>{r.occ ?? 0}%</td>
                 </tr>
               ))}

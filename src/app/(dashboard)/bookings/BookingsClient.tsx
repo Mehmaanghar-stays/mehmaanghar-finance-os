@@ -378,7 +378,7 @@ export function BookingsClient({
         <MetricCard label="Period Revenue" value={fI(totalRev)}        sub="Total booking revenue"  iconText="₹"  iconVariant="g" />
         <MetricCard label="Nights"         value={String(totalNights)}  sub="Total booked nights"   iconText="🌙" iconVariant="o" />
         <MetricCard label="Guests"         value={String(uniqueGuests)} sub="Unique guests"          iconText="👤" iconVariant="b" />
-        <MetricCard label="Avg/Night"      value={stayNights > 0 ? fI(avgPerNight) : '—'} sub="Stay bookings only" iconText="₹" iconVariant="b" />
+        <MetricCard label="Avg/Night"      value={stayNights > 0 ? fIN(avgPerNight) : '—'} sub="Stay bookings only" iconText="₹" iconVariant="b" />
         <MetricCard label="Events"         value={String(eventCount)}   sub="Event bookings"         iconText="🎉" iconVariant="o" />
       </MetricCardGrid>
 

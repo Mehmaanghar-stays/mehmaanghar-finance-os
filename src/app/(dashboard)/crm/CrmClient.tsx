@@ -274,7 +274,7 @@ export function CrmClient({ guests, bookings }: CrmClientProps) {
       <MetricCardGrid>
         <MetricCard label="Total Guests" value={String(tot)}          sub="Active this period"          iconText="👤" iconVariant="b" />
         <MetricCard label="Return Rate"  value={returnRate + '%'}     sub={returnRate >= 30 ? '✓ Good loyalty' : '⚠ Below 30% target'} iconText="↩" iconVariant={returnRate >= 30 ? 'g' : 'go'} />
-        <MetricCard label="Avg CLV"      value={fI(avgCLV)}           sub="Customer lifetime value"    iconText="₹" iconVariant="o" />
+        <MetricCard label="Avg CLV"      value={fIN(avgCLV)}           sub="Customer lifetime value"    iconText="₹" iconVariant="o" />
         <MetricCard label="Avg Rating"   value={avgRating > 0 ? avgRating + ' ⭐' : 'N/A'} sub="Guest satisfaction" iconText="⭐" iconVariant="b" />
         <MetricCard label="Avg Stay"     value={avgStay + ' nights'}  sub="Nights per visit"           iconText="🌙" iconVariant="b" />
       </MetricCardGrid>

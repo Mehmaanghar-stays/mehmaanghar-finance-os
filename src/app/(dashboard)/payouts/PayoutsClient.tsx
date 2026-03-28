@@ -231,21 +231,21 @@ export function PayoutsClient({
   async function handleSyncFromReports() {
     try {
       const res = await fetch('/api/payouts/sync', { method: 'POST' });
-      if (!res.ok) { toast('Sync failed — API not yet wired (Phase 6)', 'er'); return; }
+      if (!res.ok) { toast('Sync failed — please try again', 'er'); return; }
       const data = await res.json();
       toast(`✓ ${data.count ?? 0} payouts synced from reports`, 'ok');
       startTransition(() => router.refresh());
-    } catch { toast('Sync API not yet available (Phase 6)', 'in'); }
+    } catch { toast('Sync failed — network error', 'er'); }
   }
 
   async function handleRecalcPending() {
     try {
       const res = await fetch('/api/payouts/recalc', { method: 'POST' });
-      if (!res.ok) { toast('Recalc failed — API not yet wired (Phase 6)', 'er'); return; }
+      if (!res.ok) { toast('Recalculate failed — please try again', 'er'); return; }
       const data = await res.json();
       toast(`✓ ${data.updated ?? 0} pending payouts recalculated`, 'ok');
       startTransition(() => router.refresh());
-    } catch { toast('Recalc API not yet available (Phase 6)', 'in'); }
+    } catch { toast('Recalculate failed — network error', 'er'); }
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ export function PayoutsClient({
           {(allTimePending > 0 || payouts.length > 0) && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
               <span style={{ background: allTimePending > 0 ? 'var(--rdp)' : 'var(--grp)', color: allTimePending > 0 ? 'var(--rd)' : 'var(--gr)', display: 'inline-flex', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 700 }}>
-                {allTimePending > 0 ? `${allTimePending} Pending (all-time) — ${fI(allTimePendingAmt)}` : 'All Paid ✓'}
+                {allTimePending > 0 ? `${allTimePending} Pending (all-time) — ${fIN(allTimePendingAmt)}` : 'All Paid ✓'}
               </span>
               {pendingCount > 0 && pendingCount !== allTimePending && (
                 <span style={{ fontSize: '10.5px', color: 'var(--t3)' }}>{pendingCount} pending in this period</span>

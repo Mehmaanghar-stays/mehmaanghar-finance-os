@@ -15,8 +15,7 @@
 //   No UtilsEntry model exists in the schema. Entries are stored as a JSON
 //   array in UtilsSetting under key='utils_entries'. The page fetches this
 //   via the server shell and passes it as a prop. Mutations call
-//   POST/PATCH/DELETE /api/utils (Phase 6 API). Until Phase 6 is live, the
-//   modal save shows a toast indicating the API is not yet wired.
+//   POST/PATCH/DELETE /api/utils — fully wired.
 //   The evaluation migration plan documents the UtilsEntry model to add.
 //
 // Source: <div class="page" id="page-utils"> + rndUtils(), saveUtil(),

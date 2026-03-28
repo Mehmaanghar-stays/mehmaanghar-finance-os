@@ -58,6 +58,7 @@ function fI(n: number): string {
   if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
   return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -475,7 +476,7 @@ export function InsightsClient({
               if (targets.revenue > 0) {
                 const met = pa.rev >= targets.revenue;
                 statuses.push({
-                  label: 'Revenue', val: fI(pa.rev), target: fI(targets.revenue),
+                  label: 'Revenue', val: fIN(pa.rev), target: fIN(targets.revenue),
                   pct: Math.min(100, Math.round(pa.rev / targets.revenue * 100)), met,
                 });
               }
@@ -489,14 +490,14 @@ export function InsightsClient({
               if (targets.roi > 0 && pa._hasCapital) {
                 const met = (pa.roi ?? 0) >= targets.roi;
                 statuses.push({
-                  label: 'ROI', val: pa.roi !== null ? (pa.roi ?? 0).toFixed(2) + '%' : 'N/A', target: targets.roi + '%',
+                  label: 'ROI', val: pa._hasCapital ? (pa.roi ?? 0).toFixed(2) + '%' : 'N/A', target: targets.roi + '%',
                   pct: Math.min(100, Math.round(Math.max(0, pa.roi ?? 0) / targets.roi * 100)), met,
                 });
               }
               if (targets.expense_limit > 0) {
                 const met = pa.exp <= targets.expense_limit;
                 statuses.push({
-                  label: 'Expenses', val: fI(pa.exp), target: '≤' + fI(targets.expense_limit),
+                  label: 'Expenses', val: fIN(pa.exp), target: '≤' + fIN(targets.expense_limit),
                   pct: Math.min(100, Math.round(pa.exp / targets.expense_limit * 100)), met,
                 });
               }

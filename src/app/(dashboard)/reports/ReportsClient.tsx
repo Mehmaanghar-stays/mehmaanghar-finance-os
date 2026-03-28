@@ -10,7 +10,7 @@
 //     - ↓ generates a CSV client-side from the report row data (no server call)
 //
 //  2. Generate Reports card grid (6 export-type cards)
-//     - Each calls POST /api/exports — wired in Phase 6 API layer
+//     - Each calls handleExport() client-side using loaded report data
 //
 // FIX (Bug 12): propById was () => null — city/property filters broken.
 //               Per-row ↓ now generates CSV client-side immediately.
@@ -128,7 +128,7 @@ async function pdfDownload(rep: SerializableReport, propName: string) {
     ['Investor Net',     fIN(rep.invProfit)],
     ['Nights',           String(rep.nights ?? 0)],
     ['Occupancy',        (rep.occ ?? 0).toFixed(1) + '%'],
-    ['ROI',              rep.roi !== null ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A'],
+    ['ROI',              rep._hasCapital ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A'],
     ['ADR',              fIN(rep.adr ?? 0)],
     ['RevPAR',           fIN(rep.revpar ?? 0)],
   ];
@@ -284,7 +284,7 @@ export function ReportsClient({
       'Inv. Net':  fR(r.invProfit),
       Nights:      String(r.nights ?? 0),
       'Occ%':      (r.occ ?? 0).toFixed(1) + '%',
-      ROI:         r.roi !== null ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
+      ROI:         r._hasCapital ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
       ADR:         fR(r.adr ?? 0),
       RevPAR:      fR(r.revpar ?? 0),
     });
@@ -390,7 +390,7 @@ export function ReportsClient({
                 String(r.commission), String(r.invProfit),
                 String(r.nights ?? 0),
                 `${(r.occ ?? 0).toFixed(1)}%`,
-                r.roi !== null ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
+                r._hasCapital ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
                 String(r.adr ?? 0), String(r.revpar ?? 0),
               ];
             }),
@@ -412,7 +412,7 @@ export function ReportsClient({
                 'Rs. ' + r.commission.toLocaleString('en-IN'),
                 'Rs. ' + r.invProfit.toLocaleString('en-IN'),
                 `${(r.occ ?? 0).toFixed(1)}%`,
-                r.roi !== null ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
+                r._hasCapital ? `${(r.roi ?? 0).toFixed(2)}%` : 'N/A',
               ];
             }),
             filename: `mg-reports-${new Date().toISOString().slice(0, 10)}.pdf`,
@@ -458,7 +458,7 @@ export function ReportsClient({
                         {propName} — {MN[r.month]} {r.year}
                       </div>
                       <div className="rmeta">
-                        Rev: {fIN(r.rev)} · Exp: {fIN(r.exp)} · Profit: {fIN(r.opProfit)} · Occ: {(r.occ ?? 0).toFixed(1)}% · ROI: {r.roi !== null ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A'}
+                        Rev: {fIN(r.rev)} · Exp: {fIN(r.exp)} · Profit: {fIN(r.opProfit)} · Occ: {(r.occ ?? 0).toFixed(1)}% · ROI: {r._hasCapital ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A'}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
@@ -544,7 +544,7 @@ export function ReportsClient({
                       'Rs. ' + r.opProfit.toLocaleString('en-IN'),
                       'Rs. ' + r.invProfit.toLocaleString('en-IN'),
                       (r.occ ?? 0).toFixed(1) + '%',
-                      r.roi !== null ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
+                      r._hasCapital ? (r.roi ?? 0).toFixed(2) + '%' : 'N/A',
                     ]),
                     filename: `mg-${card.type}-report-${new Date().toISOString().slice(0, 10)}.pdf`,
                   });
@@ -597,7 +597,7 @@ function ReportSnapshot({
     { l: 'Investor Net',                                 v: fIN(rep.invProfit),                                          c: 'var(--bl)' },
     { l: 'Nights',                                       v: String(rep.nights ?? 0),                                     c: 'var(--tx)' },
     { l: 'Occupancy',                                    v: (rep.occ ?? 0).toFixed(1) + '%',                             c: 'var(--go)' },
-    { l: 'ROI',                                          v: rep.roi !== null ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',  c: 'var(--or)' },
+    { l: 'ROI',                                          v: rep._hasCapital ? (rep.roi ?? 0).toFixed(2) + '%' : 'N/A',  c: 'var(--or)' },
     { l: 'ADR',                                          v: fIN(rep.adr ?? 0),                                           c: 'var(--tx)' },
     { l: 'RevPAR',                                       v: fIN(rep.revpar ?? 0),                                        c: 'var(--gr)' },
   ];

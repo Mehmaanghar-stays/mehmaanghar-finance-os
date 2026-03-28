@@ -76,7 +76,7 @@ export async function regenReports(): Promise<RegenResult> {
   });
 
   const existingReports = await prisma.report.findMany({
-    select: { id: true, property_id: true, month: true, year: true },
+    select: { id: true, property_id: true, month: true, year: true, data: true },
   });
 
   // ── 2. Build O(1) lookups ────────────────────────────────────────────────
@@ -300,11 +300,14 @@ export async function regenReports(): Promise<RegenResult> {
   }
 
   // ── 7. Identify stale auto-generated reports to delete ───────────────────
-  // Only remove reports that were auto-generated AND have no current data.
-  // Manually-created reports (without _autoGen flag in data) are never deleted.
+  // Only remove reports flagged with _autoGen:true that have no current data.
+  // Manually-created reports (no _autoGen flag) are never deleted.
   const staleIds: string[] = [];
   for (const r of existingReports) {
     if (!r.property_id || !r.month) continue;
+    // Skip manually-created reports — only auto-generated ones are managed here
+    const data = r.data as Record<string, unknown> | null;
+    if (!data?._autoGen) continue;
     const key = `${r.property_id}_${r.month}_${r.year}`;
     if (!validKeys.has(key)) {
       staleIds.push(r.id);

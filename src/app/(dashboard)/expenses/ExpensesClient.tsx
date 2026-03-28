@@ -58,6 +58,7 @@ function fI(n: number): string {
   if (v >= 1000)   return (n < 0 ? '-' : '') + '₹' + (v / 1000).toFixed(2) + 'K';
   return (n < 0 ? '-' : '') + '₹' + v.toFixed(2);
 }
+const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MS = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -585,8 +586,8 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
                           <div style={{ fontSize: '10.5px', color: 'var(--t3)' }}>{p.city}</div>
                         )}
                       </td>
-                      <td style={{ color: 'var(--rd)', fontWeight: 700 }}>{fI(p.exp)}</td>
-                      <td>{fI(p.rev)}</td>
+                      <td style={{ color: 'var(--rd)', fontWeight: 700 }}>{fIN(p.exp)}</td>
+                      <td>{fIN(p.rev)}</td>
                       <td>
                         <span style={{ fontWeight: 700, color: p.ratio > 20 ? 'var(--rd)' : 'var(--gr)' }}>
                           {p.ratio}%

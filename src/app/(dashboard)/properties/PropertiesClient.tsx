@@ -389,13 +389,13 @@ export function PropertiesClient({
 
                         {/* Revenue */}
                         <td>
-                          {lR ? fI(lR.rev) : <span style={{ color: 'var(--t3)' }}>—</span>}
+                          {lR ? fF(lR.rev) : <span style={{ color: 'var(--t3)' }}>—</span>}
                         </td>
 
                         {/* Investor Net */}
                         <td>
                           {lR
-                            ? <span style={{ color: 'var(--gr)', fontWeight: 700 }}>{fI(lR.invProfit)}</span>
+                            ? <span style={{ color: 'var(--gr)', fontWeight: 700 }}>{fF(lR.invProfit)}</span>
                             : <span style={{ color: 'var(--t3)' }}>—</span>}
                         </td>
 
@@ -403,7 +403,7 @@ export function PropertiesClient({
                         <td>
                           {lR ? (
                             <div>
-                              <span style={{ color: 'var(--or)', fontWeight: 700 }}>{fI(lR.commission)}</span>
+                              <span style={{ color: 'var(--or)', fontWeight: 700 }}>{fF(lR.commission)}</span>
                               {hasBroker && (
                                 <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '2px' }}>
                                   incl. broker
@@ -504,15 +504,15 @@ export function PropertiesClient({
 
               {/* KPI grid */}
               <div className="dp-kpi">
-                <div className="dp-k"><div className="dp-kl">Revenue</div><div className="dp-kv">{fI(panelLatestRep.rev)}</div></div>
-                <div className="dp-k"><div className="dp-kl">Expenses</div><div className="dp-kv" style={{ color: 'var(--rd)' }}>{fI(panelLatestRep.exp)}</div></div>
-                <div className="dp-k"><div className="dp-kl">Op. Profit</div><div className="dp-kv" style={{ color: 'var(--gr)' }}>{fI(panelLatestRep.opProfit)}</div></div>
+                <div className="dp-k"><div className="dp-kl">Revenue</div><div className="dp-kv">{fF(panelLatestRep.rev)}</div></div>
+                <div className="dp-k"><div className="dp-kl">Expenses</div><div className="dp-kv" style={{ color: 'var(--rd)' }}>{fF(panelLatestRep.exp)}</div></div>
+                <div className="dp-k"><div className="dp-kl">Op. Profit</div><div className="dp-kv" style={{ color: 'var(--gr)' }}>{fF(panelLatestRep.opProfit)}</div></div>
                 <div className="dp-k">
                   <div className="dp-kl">Commission ({panelProp.effectiveComm}%)</div>
-                  <div className="dp-kv" style={{ color: 'var(--or)' }}>{fI(panelLatestRep.commission)}</div>
+                  <div className="dp-kv" style={{ color: 'var(--or)' }}>{fF(panelLatestRep.commission)}</div>
                   <div className="dp-ks">{panelProp.broker_public && panelProp.broker_name ? 'MHG + broker' : 'of op. profit'}</div>
                 </div>
-                <div className="dp-k"><div className="dp-kl">Investor Net</div><div className="dp-kv" style={{ color: 'var(--bl)' }}>{fI(panelLatestRep.invProfit)}</div></div>
+                <div className="dp-k"><div className="dp-kl">Investor Net</div><div className="dp-kv" style={{ color: 'var(--bl)' }}>{fF(panelLatestRep.invProfit)}</div></div>
                 <div className="dp-k">
                   <div className="dp-kl">Occupancy</div>
                   <div className="dp-kv" style={{ color: (panelLatestRep.occ ?? 0) >= 75 ? 'var(--gr)' : 'var(--go)' }}>
@@ -529,8 +529,8 @@ export function PropertiesClient({
                     {panelProp.capital > 0 ? (panelLatestRep.roi ?? 0).toFixed(2) + '%' : 'N/A'}
                   </div>
                 </div>
-                <div className="dp-k"><div className="dp-kl">ADR</div><div className="dp-kv">{fI(panelLatestRep.adr ?? 0)}</div></div>
-                <div className="dp-k"><div className="dp-kl">RevPAR</div><div className="dp-kv">{fI(panelLatestRep.revpar ?? 0)}</div></div>
+                <div className="dp-k"><div className="dp-kl">ADR</div><div className="dp-kv">{fF(panelLatestRep.adr ?? 0)}</div></div>
+                <div className="dp-k"><div className="dp-kl">RevPAR</div><div className="dp-kv">{fF(panelLatestRep.revpar ?? 0)}</div></div>
               </div>
 
               {/* Commission breakdown box */}
@@ -627,10 +627,10 @@ function ReportHistory({ reps, capital }: { reps: SerializableReport[]; capital:
               {reps.map((r) => (
                 <tr key={r.id}>
                   <td>{MS[r.month]} {r.year}</td>
-                  <td>{fI(r.rev)}</td>
-                  <td style={{ color: 'var(--gr)' }}>{fI(r.opProfit)}</td>
-                  <td style={{ color: 'var(--or)' }}>{fI(r.commission)}</td>
-                  <td style={{ color: 'var(--bl)' }}>{fI(r.invProfit)}</td>
+                  <td>{fF(r.rev)}</td>
+                  <td style={{ color: 'var(--gr)' }}>{fF(r.opProfit)}</td>
+                  <td style={{ color: 'var(--or)' }}>{fF(r.commission)}</td>
+                  <td style={{ color: 'var(--bl)' }}>{fF(r.invProfit)}</td>
                   <td>{r.occ ?? 0}%</td>
                   {/* Use capital to decide N/A vs value — fixes 0% display bug */}
                   <td style={{ color: capital > 0 ? ((r.roi ?? 0) >= 20 ? 'var(--gr)' : 'var(--rd)') : 'var(--t3)' }}>

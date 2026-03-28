@@ -34,6 +34,8 @@ export interface SerializableReport {
   revpar: number;
   channels: Record<string, number>;
   expCats: Record<string, number>;
+  /** true when investor capital > 0; false means ROI should show as N/A */
+  _hasCapital: boolean;
 }
 
 export interface SerializableProperty {
@@ -85,8 +87,9 @@ export default async function DashboardPage() {
       roi:        Number(d.roi ?? 0),
       adr:        Number(d.adr ?? 0),
       revpar:     Number(d.revpar ?? 0),
-      channels:   (d.channels as Record<string, number>) ?? {},
-      expCats:    (d.expCats as Record<string, number>) ?? {},
+      channels:    (d.channels as Record<string, number>) ?? {},
+      expCats:     (d.expCats as Record<string, number>) ?? {},
+      _hasCapital: Boolean(d._hasCapital),
     }];
   });
 
