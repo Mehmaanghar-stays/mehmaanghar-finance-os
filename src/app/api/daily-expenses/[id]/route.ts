@@ -18,7 +18,7 @@ import { deleteFile } from "@/lib/storage";
 import { Prisma } from "@/generated/prisma/client/client";
 import { regenReports } from "@/lib/regenReports";
 
-const STORAGE_BUCKET = "mg-finance-os";
+const STORAGE_BUCKET = process.env.STORAGE_BUCKET ?? "mg-finance-os";
 
 interface DailyExpenseRow {
   id: string;

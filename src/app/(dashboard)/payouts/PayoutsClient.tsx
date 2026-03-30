@@ -124,7 +124,7 @@ export function PayoutsClient({
 
   // ── Period store + per-page filters ───────────────────────────────────────
   const periodState = usePeriod();
-  const filters = usePageFilters({ investor: true, status: true });
+  const filters = usePageFilters({ investor: true, status: true, property: true });
 
   // ── Period-filtered (Pass 1 — for KPIs) ──────────────────────────────────
   const periodPays = useMemo(
@@ -153,6 +153,14 @@ export function PayoutsClient({
     [uniqueInvestors],
   );
 
+  const propertyOptions: FilterOption[] = useMemo(() => {
+    const seen = new Map<string, string>(); // id → name
+    payouts.forEach((p) => { if (!seen.has(p.propertyId)) seen.set(p.propertyId, p.propertyName); });
+    return [...seen.entries()]
+      .map(([id, name]) => ({ value: id, label: name }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [payouts]);
+
   const statusOptions: FilterOption[] = [
     { value: 'pending', label: 'Pending' },
     { value: 'paid',    label: 'Paid'    },
@@ -169,8 +177,9 @@ export function PayoutsClient({
         return key === filters.investor;
       });
     }
+    if (filters.property !== 'all') rows = rows.filter((p) => p.propertyId === filters.property);
     return rows.sort((a, b) => b.year * 100 + b.month - (a.year * 100 + a.month));
-  }, [periodPays, filters.status, filters.investor]);
+  }, [periodPays, filters.status, filters.investor, filters.property]);
 
   // Reset to page 1 whenever filtered results change
   useEffect(() => { setPage(1); }, [filteredPays.length]);
@@ -314,9 +323,10 @@ export function PayoutsClient({
 
       <PageFilterBar
         filters={filters}
-        config={{ investor: true, status: true }}
+        config={{ investor: true, status: true, property: true }}
         investors={investorOptions}
         statuses={statusOptions}
+        properties={propertyOptions}
       />
 
       {/* ── KPI cards ────────────────────────────────────────────────────── */}

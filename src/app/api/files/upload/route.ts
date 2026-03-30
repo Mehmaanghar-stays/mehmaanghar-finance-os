@@ -33,7 +33,7 @@ import { uploadFile } from "@/lib/storage";
 // ---------------------------------------------------------------------------
 
 const MAX_BYTES      = 5 * 1024 * 1024; // 5 MB pre-compression limit
-const DEFAULT_BUCKET = "mg-finance-os";
+const DEFAULT_BUCKET = process.env.STORAGE_BUCKET ?? "mg-finance-os";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",

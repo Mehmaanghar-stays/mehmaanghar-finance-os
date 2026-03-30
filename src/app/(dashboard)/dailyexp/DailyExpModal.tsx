@@ -34,7 +34,7 @@ export const DAILY_EXP_CATS: Array<{ value: string; label: string }> = [
   { value: 'other',        label: 'Other'         },
 ];
 
-const BUCKET = 'mg-finance-os';
+const BUCKET = process.env.NEXT_PUBLIC_STORAGE_BUCKET ?? 'mg-finance-os';
 const MAX_MB  = 5;
 
 // ---------------------------------------------------------------------------

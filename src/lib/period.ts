@@ -303,7 +303,7 @@ export function withD(a: AggRaw | null): AggResult | null {
     revpar: a.days > 0 ? Math.round(rRev / a.days) : 0,
     margin: a.rev ? +((a.opProfit / a.rev) * 100).toFixed(1) : 0,
     commPct: a.opProfit > 0 ? +((a.commission / a.opProfit) * 100).toFixed(1) : 0,
-    invPct: a.opProfit > 0 ? +((a.invProfit / a.opProfit) * 100).toFixed(1) : 0,
+    invPct:  a.opProfit > 0 ? +(100 - (a.commission / a.opProfit) * 100).toFixed(1) : 0,
   };
 }
 

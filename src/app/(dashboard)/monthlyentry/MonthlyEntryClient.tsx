@@ -58,8 +58,8 @@ const MN = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov'
 const DEFAULT_EXP_CATS: Array<{ category: string }> = [
   { category: 'rent'        },
   { category: 'electricity' },
-  { category: 'cleaning'    },
-  { category: 'maintenance' },
+  { category: 'staff'       },
+  { category: 'other'       },
 ];
 
 // ---------------------------------------------------------------------------

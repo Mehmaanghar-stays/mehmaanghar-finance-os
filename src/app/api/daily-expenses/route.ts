@@ -35,7 +35,7 @@ import { regenReports } from "@/lib/regenReports";
 // Constants
 // ---------------------------------------------------------------------------
 
-const STORAGE_BUCKET = "mg-finance-os";
+const STORAGE_BUCKET = process.env.STORAGE_BUCKET ?? "mg-finance-os";
 
 // ---------------------------------------------------------------------------
 // Response types
