@@ -29,6 +29,7 @@ import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
 import { aggExpCats, expLabel, expColor, EXP_DEFAULT_CATS } from './expUtils';
 import type { ExpTrendPoint } from './ExpenseCharts';
 import type { SerializableReport } from '../dashboard/page';
+import { PropertyCombobox } from '@/components/ui/PropertyCombobox';
 
 // ---------------------------------------------------------------------------
 // Minimal property type — expenses only needs id, name, city, comm, capital
@@ -423,16 +424,12 @@ export function ExpensesClient({ reports, properties }: ExpensesClientProps) {
             </div>
           </div>
           {expView === 'property' && (
-            <select
-              className="fsel"
+            <PropertyCombobox
+              options={properties.map((p) => ({ value: p.id, label: p.name }))}
               value={expPropId}
-              onChange={(e) => setExpPropId(e.target.value)}
-            >
-              <option value="">Select Property</option>
-              {properties.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+              onChange={setExpPropId}
+              placeholder="Select Property…"
+            />
           )}
         </div>
       </div>

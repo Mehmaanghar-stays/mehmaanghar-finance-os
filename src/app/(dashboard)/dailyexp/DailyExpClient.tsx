@@ -217,7 +217,7 @@ export function DailyExpClient({
       const res = await fetch('/api/files/signed-url', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bucket: 'mg-finance-os', path: invoicePath, expiresIn: 120 }),
+        body: JSON.stringify({ bucket: process.env.NEXT_PUBLIC_STORAGE_BUCKET ?? 'mg-finance-os', path: invoicePath, expiresIn: 120 }),
       });
       if (!res.ok) { toast('Could not load invoice — please try again', 'er'); return; }
       const { url } = await res.json();

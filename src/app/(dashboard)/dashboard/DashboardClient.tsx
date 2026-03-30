@@ -444,13 +444,17 @@ export function DashboardClient({ reports, properties, initialExpenseGoal, goalM
         <MetricCard       label="Secured Assets"       value={fIN(securedAssetsTotal)} sub="Deposits + advances (recoverable)"           iconText="🔒" iconVariant="g" />
       </MetricCardGrid>
 
-      {/* ── Info cards row: Total Expenses + Expense Goal ──────────────────── */}
+      {/* ── Info cards row: Total Capital Invested + Expense Goal ─────────── */}
       <div className="rg2" style={{ marginBottom: '16px' }}>
-        {/* Total Expenses */}
+        {/* Total Capital Invested — sum of investor capitals for filtered properties */}
         <div className="cc" style={{ padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--rd)', marginBottom: '4px' }}>TOTAL EXPENSES</div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--rd)', lineHeight: 1 }}>{fIN(agg!.exp)}</div>
-          <div style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '4px' }}>{expRatio}% of revenue</div>
+          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--bl)', marginBottom: '4px' }}>TOTAL CAPITAL INVESTED</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--bl)', lineHeight: 1 }}>
+            {fIN(properties.filter((p) => filteredPids.has(p.id)).reduce((s, p) => s + (p.capital ?? 0), 0))}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '4px' }}>
+            Across {activeProps} propert{activeProps !== 1 ? 'ies' : 'y'}
+          </div>
         </div>
 
         {/* Expense goal — DB-persisted via /api/targets */}

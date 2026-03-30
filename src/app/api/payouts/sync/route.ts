@@ -65,12 +65,13 @@ export async function POST(
     });
 
     // Fetch existing payout combinations to avoid duplicates
+    // Key includes property_id — same investor can have payouts for different properties
     const existingPayouts = await prisma.payout.findMany({
-      select: { investor_id: true, year: true, month: true },
+      select: { investor_id: true, property_id: true, year: true, month: true },
     });
 
     const existingSet = new Set(
-      existingPayouts.map((p) => `${p.investor_id}:${p.year}:${p.month}`)
+      existingPayouts.map((p) => `${p.investor_id}:${p.property_id}:${p.year}:${p.month}`)
     );
 
     // Build list of missing payout records
@@ -88,7 +89,7 @@ export async function POST(
         (inv) => inv.property_id === report.property_id
       );
       for (const inv of propertyInvestors) {
-        const key = `${inv.id}:${report.year}:${report.month}`;
+        const key = `${inv.id}:${report.property_id}:${report.year}:${report.month}`;
         if (!existingSet.has(key)) {
           toCreate.push({
             property_id: report.property_id,
@@ -97,7 +98,7 @@ export async function POST(
             month: report.month,
             amount_owed: 0,
           });
-          existingSet.add(key); // prevent duplicates within this batch
+          existingSet.add(key); // prevent duplicates within this batch (keyed by investor+property+period)
         }
       }
     }

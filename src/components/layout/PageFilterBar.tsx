@@ -28,6 +28,7 @@
 // When any filter is active, a "Clear all" link appears on the right.
 
 import type { PageFilters, FilterConfig } from '@/hooks/usePageFilters';
+import { PropertyCombobox } from '@/components/ui/PropertyCombobox';
 
 // ---------------------------------------------------------------------------
 // Option types
@@ -120,18 +121,15 @@ export function PageFilterBar({
         </select>
       )}
 
-      {/* Property */}
+      {/* Property — searchable combobox */}
       {config.property && properties.length > 0 && (
-        <select
-          {...sel('Property filter')}
+        <PropertyCombobox
+          options={properties.map((p) => ({ value: p.value, label: p.label }))}
           value={filters.property}
-          onChange={(e) => filters.set('property', e.target.value)}
-        >
-          <option value="all">All Properties</option>
-          {properties.map((p) => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
+          onChange={(v) => filters.set('property', v)}
+          allLabel="All Properties"
+          width="160px"
+        />
       )}
 
       {/* Commission */}
