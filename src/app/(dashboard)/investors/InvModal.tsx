@@ -66,9 +66,10 @@ export function InvModal({
   isSaving,
 }: InvModalProps) {
   const [form, setForm] = useState<InvestorFormValues>(BLANK);
+  const [propSearch, setPropSearch] = useState('');
 
   useEffect(() => {
-    if (isOpen) setForm(initialValues ? { ...BLANK, ...initialValues } : BLANK);
+    if (isOpen) { setForm(initialValues ? { ...BLANK, ...initialValues } : BLANK); setPropSearch(''); }
   }, [isOpen, initialValues]);
 
   function set(field: keyof InvestorFormValues, value: string) {
@@ -156,6 +157,16 @@ export function InvModal({
             Add properties first.
           </div>
         ) : (
+          <>
+          {/* Search input above the property list */}
+          <input
+            type="text"
+            value={propSearch}
+            onChange={(e) => setPropSearch(e.target.value)}
+            placeholder="Search properties…"
+            className={styles.fi}
+            style={{ marginBottom: '6px', fontSize: '12.5px', padding: '6px 10px' }}
+          />
           <div
             style={{
               display: 'flex', flexDirection: 'column', gap: '5px',
@@ -164,7 +175,9 @@ export function InvModal({
               padding: '9px', background: 'var(--bg)',
             }}
           >
-            {properties.map((p) => {
+            {properties
+              .filter((p) => !propSearch.trim() || p.name.toLowerCase().includes(propSearch.toLowerCase()) || (p.city ?? '').toLowerCase().includes(propSearch.toLowerCase()))
+              .map((p) => {
               const selected = form.propertyId === p.id;
               return (
                 <label
@@ -196,6 +209,7 @@ export function InvModal({
               );
             })}
           </div>
+          </>
         )}
       </div>
 

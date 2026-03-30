@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import styles from '@/components/ui/ui.module.css';
 import type { BookingProperty } from './BookingsClient';
+import { PropertyCombobox } from '@/components/ui/PropertyCombobox';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -262,9 +263,14 @@ export function BookingModal({
           <div className={styles.fl}>
             <label>Property *</label>
             <div className={styles.sw}>
-              <select className={styles.fs} value={form.pid} onChange={(e) => set('pid', e.target.value)}>
-                {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              <PropertyCombobox
+                options={properties.map((p) => ({ value: p.id, label: p.name }))}
+                value={form.pid}
+                onChange={(v) => set('pid', v)}
+                placeholder="Select property…"
+                inputClass={styles.fs}
+                width="100%"
+              />
             </div>
           </div>
           <div className={styles.fl}>

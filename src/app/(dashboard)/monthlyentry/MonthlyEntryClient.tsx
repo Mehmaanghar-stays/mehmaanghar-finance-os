@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { usePeriod } from '@/hooks/usePeriod';
 import styles from '@/components/ui/ui.module.css';
+import { PropertyCombobox } from '@/components/ui/PropertyCombobox';
 import { DAILY_EXP_CATS } from '../dailyexp/DailyExpModal';
 
 // ---------------------------------------------------------------------------
@@ -257,19 +258,15 @@ export function MonthlyEntryClient({
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>
               Property *
             </label>
-            <div className={styles.sw}>
-              <select
-                className={styles.fs}
-                value={pid}
-                onChange={(e) => setPid(e.target.value)}
-              >
-                {properties.length === 0
-                  ? <option value="">No properties — add one first</option>
-                  : properties.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-              </select>
-            </div>
+            <PropertyCombobox
+              options={properties.map((p) => ({ value: p.id, label: p.name }))}
+              value={pid}
+              onChange={setPid}
+              placeholder={properties.length === 0 ? 'No properties — add one first' : 'Select property…'}
+              width="100%"
+              disabled={properties.length === 0}
+              inputClass={styles.fs}
+            />
           </div>
           <div style={{ marginBottom: '12px' }}>
             <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', marginBottom: '5px' }}>

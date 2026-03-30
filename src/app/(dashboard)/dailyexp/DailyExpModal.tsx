@@ -16,6 +16,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import styles from '@/components/ui/ui.module.css';
 import type { DailyExpProperty } from './DailyExpClient';
+import { PropertyCombobox } from '@/components/ui/PropertyCombobox';
 
 // ---------------------------------------------------------------------------
 // Constants — verbatim from the HTML dexpModal select options
@@ -253,21 +254,15 @@ export function DailyExpModal({
       <div className={styles.fg}>
         <div className={styles.fl}>
           <label>Property *</label>
-          <div className={styles.sw}>
-            <select
-              className={styles.fs}
-              value={form.pid}
-              onChange={(e) => set('pid', e.target.value)}
-            >
-              {properties.length === 0 ? (
-                <option value="">No properties</option>
-              ) : (
-                properties.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))
-              )}
-            </select>
-          </div>
+          <PropertyCombobox
+            options={properties.map((p) => ({ value: p.id, label: p.name }))}
+            value={form.pid}
+            onChange={(v) => set('pid', v)}
+            placeholder={properties.length === 0 ? 'No properties' : 'Select property…'}
+            disabled={properties.length === 0}
+            inputClass={styles.fs}
+            width="100%"
+          />
         </div>
         <div className={styles.fl}>
           <label>Date *</label>

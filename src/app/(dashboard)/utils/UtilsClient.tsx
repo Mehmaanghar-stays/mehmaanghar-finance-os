@@ -26,6 +26,7 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
 import { UtilModal } from './UtilModal';
 import type { UtilFormValues } from './UtilModal';
+import { PropertyCombobox } from '@/components/ui/PropertyCombobox';
 
 // ---------------------------------------------------------------------------
 // Minimal property type — utils only needs id, name, city
@@ -302,10 +303,12 @@ export function UtilsClient({
         <select className="fsel" value={filterYear} onChange={(e) => setFilterYear(+e.target.value)}>
           {yearOpts.map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
-        <select className="fsel" value={filterProp} onChange={(e) => setFilterProp(e.target.value)}>
-          <option value="all">All Properties</option>
-          {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        <PropertyCombobox
+          options={properties.map((p) => ({ value: p.id, label: p.name }))}
+          value={filterProp}
+          onChange={setFilterProp}
+          allLabel="All Properties"
+        />
       </div>
 
       {/* ── Tabs: Rent | Electricity | Custom ────────────────────────────── */}
