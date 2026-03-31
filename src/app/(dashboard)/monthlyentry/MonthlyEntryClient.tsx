@@ -95,6 +95,8 @@ function fIN(n: number) {
 interface MonthlyEntryClientProps {
   properties: MonthlyEntryProperty[];
   canCreate: boolean;
+  /** "pid:month:year" keys for months that already have report data */
+  existingKeys: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +106,7 @@ interface MonthlyEntryClientProps {
 export function MonthlyEntryClient({
   properties,
   canCreate,
+  existingKeys,
 }: MonthlyEntryClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -117,6 +120,11 @@ export function MonthlyEntryClient({
   const [counter, setCounter]       = useState(0);
   const [isSaving, setIsSaving]     = useState(false);
   const [validation, setValidation] = useState<string[]>([]);
+
+  // True when the current pid+month+year selection already has report data
+  const dataExists = pid && month && year
+    ? existingKeys.includes(`${pid}:${month}:${year}`)
+    : false;
 
   // ── Init on mount ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -448,6 +456,19 @@ export function MonthlyEntryClient({
         </div>
       )}
 
+      {/* ── Existing data warning ──────────────────────────────────────────── */}
+      {dataExists && (
+        <div style={{
+          background: 'var(--rdp)', border: '1px solid var(--rd)',
+          borderRadius: '8px', padding: '10px 14px', marginBottom: '14px',
+          fontSize: '11.5px', color: 'var(--rd)', lineHeight: 1.5,
+        }}>
+          <strong>⚠ Data already exists for this property and month.</strong><br />
+          Monthly Entry is a one-time bulk entry tool. To update existing records,
+          use the <strong>Bookings</strong> and <strong>Daily Expenses</strong> pages instead.
+        </div>
+      )}
+
       {/* ── Action row ───────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
         <button
@@ -463,7 +484,7 @@ export function MonthlyEntryClient({
           className="btn btn-or"
           style={{ flex: 2 }}
           onClick={handleSave}
-          disabled={isSaving || !canCreate}
+          disabled={isSaving || !canCreate || dataExists}
         >
           {isSaving ? 'Saving…' : 'Save Monthly Data'}
         </button>
