@@ -390,12 +390,13 @@ export function DashboardClient({ reports, properties, initialExpenseGoal, goalM
     ? ((agg.exp / agg.rev) * 100).toFixed(1)
     : '0';
 
-  // Commission split % (for donut)
-  const commPct = agg && agg.opProfit > 0
-    ? +((agg.commission / agg.opProfit) * 100).toFixed(1)
+  // Commission split % (for donut) — use _positiveOpProfit as denominator
+  // so loss months don't inflate the commission rate across multi-month periods.
+  const commPct = agg && agg._positiveOpProfit > 0
+    ? +((agg.commission / agg._positiveOpProfit) * 100).toFixed(1)
     : 0;
-  const invPct = agg && agg.opProfit > 0
-    ? +((agg.invProfit / agg.opProfit) * 100).toFixed(1)
+  const invPct = agg && agg._positiveOpProfit > 0
+    ? +(100 - (agg.commission / agg._positiveOpProfit) * 100).toFixed(1)
     : 0;
 
   // ── Build city/property options for PageFilterBar ─────────────────────────

@@ -144,6 +144,9 @@ function handleError(err: unknown): NextResponse<ErrorResponse> {
 // POST
 // ---------------------------------------------------------------------------
 
+const MONTH_NAMES = ['','January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<SuccessResponse | ErrorResponse>> {
@@ -168,6 +171,30 @@ export async function POST(
   }
 
   const { propertyId, month, year, channels, expCats } = result.data;
+
+  // ── Idempotency guard — block re-submission if data already exists ────────
+  // Monthly Entry is a one-shot bulk entry tool. If bookings already exist
+  // for this property + month, the user must edit them individually from the
+  // Bookings and Daily Expenses pages. This prevents doubled data in reports.
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
+  const monthEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59));
+
+  const existingCount = await prisma.booking.count({
+    where: {
+      property_id: propertyId,
+      check_in: { gte: monthStart, lte: monthEnd },
+    },
+  });
+
+  if (existingCount > 0) {
+    return NextResponse.json(
+      {
+        error: `Data for this property already exists for ${MONTH_NAMES[month]} ${year}. ` +
+               `Edit individual records from the Bookings and Daily Expenses pages instead.`,
+      },
+      { status: 409 }
+    );
+  }
 
   // Build check-in / check-out dates for the booking period.
   // Monthly entry covers the 1st to last day of the month.

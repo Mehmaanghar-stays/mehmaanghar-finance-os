@@ -35,10 +35,21 @@ export default async function MonthlyEntryPage() {
     name: p.name,
   }));
 
+  // ── Fetch existing report keys — used client-side to warn before re-submit ─
+  // Keys are "pid:month:year" strings. Client checks against selection.
+  const existingReports = await prisma.report.findMany({
+    where: { property_id: { not: null }, month: { not: null } },
+    select: { property_id: true, month: true, year: true },
+  });
+  const existingKeys: string[] = existingReports
+    .filter((r) => r.property_id && r.month)
+    .map((r) => `${r.property_id}:${r.month}:${r.year}`);
+
   return (
     <MonthlyEntryClient
       properties={properties}
       canCreate={canCreate}
+      existingKeys={existingKeys}
     />
   );
 }

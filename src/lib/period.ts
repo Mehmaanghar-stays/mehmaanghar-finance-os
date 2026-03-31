@@ -120,6 +120,8 @@ export interface AggRaw {
   days: number;
   /** Sum of capital bases for unique properties in the aggregated set */
   _capitalBase: number;
+  /** Sum of opProfit for months where opProfit > 0 — used for stable commPct calculation */
+  _positiveOpProfit: number;
 }
 
 /** Aggregate with all derived display fields, produced by withD. */
@@ -258,7 +260,8 @@ export function aggReps(
       invProfit: a.invProfit + (r.invProfit || 0),
       nights: a.nights + (r.nights || 0),
       days: a.days + (r.days || 0),
-      _capitalBase: 0, // populated below
+      _capitalBase: 0,        // populated below
+      _positiveOpProfit: a._positiveOpProfit + ((r.opProfit || 0) > 0 ? (r.opProfit || 0) : 0),
     }),
     {
       rev: 0,
@@ -270,6 +273,7 @@ export function aggReps(
       nights: 0,
       days: 0,
       _capitalBase: 0,
+      _positiveOpProfit: 0,
     },
   );
   // Capital base from unique properties
@@ -302,8 +306,16 @@ export function withD(a: AggRaw | null): AggResult | null {
     adr: a.nights > 0 ? Math.round(rRev / a.nights) : 0,
     revpar: a.days > 0 ? Math.round(rRev / a.days) : 0,
     margin: a.rev ? +((a.opProfit / a.rev) * 100).toFixed(1) : 0,
-    commPct: a.opProfit > 0 ? +((a.commission / a.opProfit) * 100).toFixed(1) : 0,
-    invPct:  a.opProfit > 0 ? +(100 - (a.commission / a.opProfit) * 100).toFixed(1) : 0,
+    // commPct uses sum(opProfit where opProfit > 0) as denominator.
+    // Loss months have commission = 0 so they should not be in the denominator.
+    // This keeps commPct at the configured rate (e.g. 30%) across any
+    // aggregation period regardless of how many loss months are included.
+    commPct: a._positiveOpProfit > 0
+      ? +((a.commission / a._positiveOpProfit) * 100).toFixed(1)
+      : 0,
+    invPct: a._positiveOpProfit > 0
+      ? +(100 - (a.commission / a._positiveOpProfit) * 100).toFixed(1)
+      : 0,
   };
 }
 
