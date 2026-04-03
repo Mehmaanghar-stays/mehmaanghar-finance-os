@@ -142,6 +142,9 @@ export async function GET(
   request: NextRequest
 ): Promise<NextResponse<BookingListResponse | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "bookings", "read");
@@ -208,6 +211,9 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<BookingSingleResponse | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "bookings", "create");
@@ -377,6 +383,9 @@ export async function PUT(
   request: NextRequest
 ): Promise<NextResponse<BookingSingleResponse | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "bookings", "update");
@@ -485,6 +494,9 @@ export async function DELETE(
   request: NextRequest
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);

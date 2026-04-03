@@ -87,6 +87,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ data: DailyExpenseRow } | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "dailyexp", "update");
@@ -146,6 +149,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);

@@ -319,6 +319,9 @@ export async function GET(
   request: NextRequest
 ): Promise<NextResponse> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);
@@ -381,6 +384,9 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);

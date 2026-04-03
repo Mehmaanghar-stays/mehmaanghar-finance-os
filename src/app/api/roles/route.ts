@@ -20,6 +20,9 @@ import { requireRole, type TabPermissions, type CrudPermissions } from "@/lib/pe
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);
@@ -60,6 +63,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);

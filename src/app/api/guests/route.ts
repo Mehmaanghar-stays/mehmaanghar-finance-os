@@ -109,6 +109,9 @@ export async function GET(
   request: NextRequest
 ): Promise<NextResponse<GuestListResponse | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "crm", "read");
@@ -168,6 +171,9 @@ export async function POST(
   request: NextRequest
 ): Promise<NextResponse<GuestSingleResponse | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "crm", "create");
@@ -226,6 +232,9 @@ export async function PUT(
   request: NextRequest
 ): Promise<NextResponse<GuestSingleResponse | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     await assertPermission(role, "crm", "update");
@@ -289,6 +298,9 @@ export async function DELETE(
   request: NextRequest
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
     requireRole(role, ["SuperAdmin"]);
