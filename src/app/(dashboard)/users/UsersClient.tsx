@@ -564,7 +564,10 @@ export function UsersClient() {
       {/* ════════════════════════════════════════════════════════════════════ */}
       <div className="stl" style={{ marginTop: '8px' }}><div className="d" />Role Permissions</div>
 
-      <div className="cc" style={{ padding: '16px', marginBottom: '16px' }}>
+      <div className="crow rn">
+
+        {/* ── Left: Permission matrix ─────────────────────────────────────── */}
+        <div className="cc" style={{ padding: '16px' }}>
         {loadingRoles ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--t3)', fontSize: '13px' }}>
             Loading roles…
@@ -664,7 +667,67 @@ export function UsersClient() {
             )}
           </>
         )}
-      </div>
+        </div>{/* end permissions card */}
+
+        {/* ── Right: Notes panel ──────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '11px' }}>
+
+          {/* How permissions work */}
+          <div className="cc" style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--or)', marginBottom: '10px', letterSpacing: '0.04em' }}>
+              HOW PERMISSIONS WORK
+            </div>
+            {[
+              { icon: '👁', label: 'Visible', desc: 'Tab appears in the sidebar.' },
+              { icon: '📖', label: 'Read',    desc: 'Can view data. Visible is auto-enabled.' },
+              { icon: '✏️', label: 'Create',  desc: 'Can add new records.' },
+              { icon: '🔄', label: 'Update',  desc: 'Can edit existing records.' },
+              { icon: '🗑', label: 'Delete',  desc: 'Can delete existing records.' },
+            ].map(({ icon, label, desc }) => (
+              <div key={label} style={{ display: 'flex', gap: '8px', marginBottom: '7px', alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '13px', flexShrink: 0, marginTop: '1px' }}>{icon}</span>
+                <div style={{ fontSize: '11.5px', lineHeight: 1.45, color: 'var(--t2)' }}>
+                  <strong style={{ color: 'var(--tx)' }}>{label}</strong>
+                  {' — '}{desc}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* SuperAdmin-only actions */}
+          <div className="cc" style={{ padding: '14px 16px', background: 'var(--orp)', border: '1.5px solid var(--or)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--or)', marginBottom: '6px', letterSpacing: '0.04em' }}>
+              🔐 SUPERADMIN-ONLY
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--t2)', marginBottom: '10px', lineHeight: 1.5 }}>
+              These actions are locked to SuperAdmin regardless of the permissions granted above.
+            </div>
+            {[
+              { label: 'Regenerate Reports',   desc: 'Rebuild all reports from source data.' },
+              { label: 'Sync Payouts',         desc: 'Create missing payout records from reports.' },
+              { label: 'Recalculate Payouts',  desc: 'Recompute all pending payout amounts.' },
+              { label: 'Backup & Restore',     desc: 'Export or restore the full database.' },
+              { label: 'User Management',      desc: 'Create users, assign roles, set passwords.' },
+              { label: 'Role Permissions',     desc: 'Edit this permission matrix.' },
+              { label: 'Clear Database',       desc: 'Wipe operational data from the system.' },
+            ].map(({ label, desc }, i, arr) => (
+              <div key={label} style={{
+                marginBottom: i < arr.length - 1 ? '7px' : 0,
+                paddingBottom: i < arr.length - 1 ? '7px' : 0,
+                borderBottom: i < arr.length - 1 ? '1px solid var(--bdr)' : 'none',
+              }}>
+                <div style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--or)', marginBottom: '1px' }}>{label}</div>
+                <div style={{ fontSize: '11px', color: 'var(--t2)', lineHeight: 1.4 }}>{desc}</div>
+              </div>
+            ))}
+            <div style={{ fontSize: '10.5px', color: 'var(--t3)', lineHeight: 1.4, marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--bdr)' }}>
+              These restrictions protect data integrity and prevent accidental system-level changes.
+            </div>
+          </div>
+
+        </div>{/* end notes panel */}
+
+      </div>{/* end crow.rn grid */}
 
       {/* ════════════════════════════════════════════════════════════════════ */}
       {/* CHANGE PASSWORD MODAL                                               */}

@@ -149,7 +149,7 @@ export async function POST(
   }
 
   try {
-    await assertPermission(role, "reports", "delete");
+    requireRole(role, ["SuperAdmin"]);
   } catch (err) {
     return handleError(err);
   }

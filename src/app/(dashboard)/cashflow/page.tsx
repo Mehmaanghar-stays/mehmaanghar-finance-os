@@ -4,12 +4,26 @@
 // Fetches Report rows + Property rows (id, name, city, comm only — used for
 // filter dropdowns and propById lookup). Capital base from investor sum.
 
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { verifyToken } from '@/lib/auth';
+import { getRolePermissions } from '@/lib/permissions';
 import { prisma } from '@/lib/db';
 import type { SerializableReport } from '../dashboard/page';
 import { CashFlowClient } from './CashFlowClient';
 import type { CashFlowProperty } from './CashFlowClient';
 
 export default async function CashFlowPage() {
+  const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
+  const cookieStore = await cookies();
+  const token       = cookieStore.get(cookieName)?.value ?? '';
+  const session     = token ? await verifyToken(token) : null;
+  if (!session) redirect('/login');
+
+  const rolePerms = await getRolePermissions(session.role);
+  const tabPerms  = rolePerms?.tabPermissions ?? {};
+  if (tabPerms['cashflow'] !== true) redirect('/dashboard');
+
   // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({
     select: {

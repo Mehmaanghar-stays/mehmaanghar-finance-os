@@ -279,6 +279,8 @@ tbody td {
 .crow.r2 { grid-template-columns: 2fr 1fr; }
 .crow.r3 { grid-template-columns: 1fr 1fr 1fr; }
 .crow.re { grid-template-columns: 1fr 1fr; }
+/* rn: matrix left, fixed notes sidebar right — collapses below md */
+.crow.rn { grid-template-columns: 1fr 280px; }
 
 /* Empty state */
 .es {
@@ -441,7 +443,8 @@ tbody td {
   .pbar { flex-wrap: wrap; gap: 6px; }
   .crow.r2,
   .crow.r3,
-  .crow.re { grid-template-columns: 1fr; }
+  .crow.re,
+  .crow.rn { grid-template-columns: 1fr; }
   /* responsive — Cash flow cards: 3-col → 1-col */
   .cfrow { grid-template-columns: 1fr; }
   /* responsive — Insight grid: 3-col → 2-col */
