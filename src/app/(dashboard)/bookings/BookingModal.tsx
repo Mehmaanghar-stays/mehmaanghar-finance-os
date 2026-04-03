@@ -7,7 +7,7 @@
 // Food Catering add-on row (amount locked to 0 when unchecked).
 // Add-on services are cleared on booking type toggle.
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import styles from '@/components/ui/ui.module.css';
 import type { BookingProperty } from './BookingsClient';
@@ -131,6 +131,7 @@ export function BookingModal({
 
   useEffect(() => {
     if (isOpen) {
+      submittingRef.current = false;
       const base: BookingFormValues = {
         ...BLANK,
         pid: properties[0]?.id ?? '',
@@ -220,8 +221,12 @@ export function BookingModal({
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
+  const submittingRef = useRef(false);
+
   async function handleSubmit() {
+    if (submittingRef.current || isSaving) return;
     if (!form.pid || !form.guestName.trim()) return;
+    submittingRef.current = true;
     const bookingAmount = parseFloat(form.bookingAmount) || 0;
 
     await onSave({
@@ -244,6 +249,7 @@ export function BookingModal({
         .map((s) => ({ name: s.name, amount: parseFloat(s.amount) })),
       rating:      form.rating || undefined,
     }, editId);
+    submittingRef.current = false;
   }
 
   const fIN = (n: number) => '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -114,13 +114,15 @@ export function DailyExpModal({
   const [invoicePreview, setInvoicePreview] = useState<string | null>(null);
   const [fileError, setFileError] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+  const submittingRef  = useRef(false);
 
   const MN = ['','January','February','March','April','May','June',
                'July','August','September','October','November','December'];
 
   useEffect(() => {
     if (isOpen) {
+      submittingRef.current = false;
       const init: DailyExpFormValues = {
         ...BLANK,
         date: todayStr(),
@@ -189,9 +191,11 @@ export function DailyExpModal({
   }
 
   async function handleSubmit() {
+    if (submittingRef.current || isSaving) return;
     if (!form.pid)                         return;
     if (!form.date)                        return;
     if (!form.amount || +form.amount <= 0) return;
+    submittingRef.current = true;
 
     let invoicePath: string | null = form.existingInvoicePath;
 

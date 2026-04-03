@@ -682,7 +682,7 @@ export function UsersClient() {
               { icon: '📖', label: 'Read',    desc: 'Can view data. Visible is auto-enabled.' },
               { icon: '✏️', label: 'Create',  desc: 'Can add new records.' },
               { icon: '🔄', label: 'Update',  desc: 'Can edit existing records.' },
-              { icon: '🗑', label: 'Delete',  desc: 'Can delete existing records.' },
+              { icon: '🗑', label: 'Delete',  desc: 'Can delete records from this tab.' },
             ].map(({ icon, label, desc }) => (
               <div key={label} style={{ display: 'flex', gap: '8px', marginBottom: '7px', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: '13px', flexShrink: 0, marginTop: '1px' }}>{icon}</span>
