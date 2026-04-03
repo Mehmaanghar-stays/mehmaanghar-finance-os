@@ -8,6 +8,10 @@
 // HTML source: <div class="page active" id="page-dashboard">
 // JS source: rndMetrics(), rndDashCharts()
 
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { verifyToken } from '@/lib/auth';
+import { getRolePermissions } from '@/lib/permissions';
 import { prisma } from '@/lib/db';
 import { DashboardClient } from './DashboardClient';
 
@@ -54,6 +58,16 @@ export interface SerializableProperty {
 // ---------------------------------------------------------------------------
 
 export default async function DashboardPage() {
+  const cookieName  = process.env.COOKIE_NAME ?? 'mg_session';
+  const cookieStore = await cookies();
+  const token       = cookieStore.get(cookieName)?.value ?? '';
+  const session     = token ? await verifyToken(token) : null;
+  if (!session) redirect('/login');
+
+  const rolePerms = await getRolePermissions(session.role);
+  const tabPerms  = rolePerms?.tabPermissions ?? {};
+  if (tabPerms['dashboard'] !== true) redirect('/login');
+
   // Fetch all report rows. The Report.data column holds the full calcF() output.
   const rawReports = await prisma.report.findMany({
     select: {

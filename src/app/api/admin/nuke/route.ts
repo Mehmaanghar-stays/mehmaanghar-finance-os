@@ -35,6 +35,9 @@ export async function POST(
 ): Promise<NextResponse<NukeResponse | ErrorResponse>> {
   // ── 1. SuperAdmin only ────────────────────────────────────────────────────
   const role     = request.headers.get('x-user-role') ?? '';
+  if (!role) {
+    return NextResponse.json({ error: 'Unauthorised.' }, { status: 401 });
+  }
   const userId   = request.headers.get('x-user-id')   ?? '';
 
   try {

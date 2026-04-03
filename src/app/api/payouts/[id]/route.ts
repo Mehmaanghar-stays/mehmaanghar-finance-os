@@ -100,9 +100,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ data: PayoutRow } | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "update");
   } catch (err) {
     return handleError(err);
   }
@@ -187,9 +190,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
   const role = request.headers.get("x-user-role") ?? "";
+  if (!role) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "delete");
   } catch (err) {
     return handleError(err);
   }

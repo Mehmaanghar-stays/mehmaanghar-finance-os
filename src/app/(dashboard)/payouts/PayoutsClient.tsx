@@ -31,6 +31,7 @@ import { MetricCard, MetricCardGrid } from '@/components/ui/MetricCard';
 import { Pagination } from '@/components/ui/Pagination';
 import { useToast } from '@/components/ui/Toast';
 import type { SerializablePayout } from './page';
+import styles from '@/components/ui/ui.module.css';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -465,66 +466,49 @@ export function PayoutsClient({
         )}
       </div>
 
-      {/* ── Pay confirmation modal — replaces window.prompt ─────────────────── */}
-      {payModal && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            zIndex: 1000,
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setPayModal(null); }}
-        >
-          <div style={{
-            background: 'var(--card)', borderRadius: '14px', padding: '24px',
-            width: '380px', maxWidth: '94vw', boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
-          }}>
-            <div style={{ fontWeight: 800, fontSize: '16px', marginBottom: '4px', color: 'var(--tx)' }}>
-              Mark Payout as Paid
-            </div>
-            <div style={{ fontSize: '12.5px', color: 'var(--t3)', marginBottom: '16px' }}>
-              {payModal.investorName} — {fIN(payModal.amount)}
-            </div>
+      {/* ── Pay confirmation modal — uses standard .ov/.modal classes ────────── */}
+      <div
+        className={`${styles.ov}${payModal ? ' ' + styles.open : ''}`}
+        onClick={(e) => { if (e.target === e.currentTarget) setPayModal(null); }}
+      >
+        <div className={styles.modal} style={{ width: '380px' }}>
+          <button className={styles['mc-x']} onClick={() => setPayModal(null)} disabled={isPaying}>✕</button>
+          <div className={styles.mt}>Mark Payout as Paid</div>
+          <div className={styles.ms}>
+            {payModal?.investorName} — {payModal ? fIN(payModal.amount) : ''}
+          </div>
 
-            <label style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--t2)', display: 'block', marginBottom: '6px' }}>
-              Payment Reference / UTR (optional)
-            </label>
+          <div className={styles.fl} style={{ marginBottom: '16px' }}>
+            <label className={styles.label}>Payment Reference / UTR (optional)</label>
             <input
+              className={styles.fi}
               type="text"
               value={payRef}
               onChange={(e) => setPayRef(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && confirmMarkPaid()}
+              onKeyDown={(e) => e.key === 'Enter' && !isPaying && confirmMarkPaid()}
               placeholder="e.g. UTR123456789"
-              autoFocus
-              style={{
-                width: '100%', padding: '9px 12px', fontSize: '13px',
-                border: '1.5px solid var(--bdr)', borderRadius: '8px',
-                background: 'var(--bg)', color: 'var(--tx)',
-                marginBottom: '16px', boxSizing: 'border-box',
-              }}
+              autoFocus={!!payModal}
             />
+          </div>
 
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                className="btn btn-g btn-sm"
-                onClick={() => setPayModal(null)}
-                disabled={isPaying}
-                style={{ padding: '8px 18px' }}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-or btn-sm"
-                onClick={confirmMarkPaid}
-                disabled={isPaying}
-                style={{ padding: '8px 18px' }}
-              >
-                {isPaying ? 'Saving…' : '✓ Confirm Paid'}
-              </button>
-            </div>
+          <div className={styles.mf}>
+            <button
+              className={`${styles.mb} ${styles.can}`}
+              onClick={() => setPayModal(null)}
+              disabled={isPaying}
+            >
+              Cancel
+            </button>
+            <button
+              className={`${styles.mb} ${styles.sub}`}
+              onClick={confirmMarkPaid}
+              disabled={isPaying}
+            >
+              {isPaying ? 'Saving…' : '✓ Confirm Paid'}
+            </button>
           </div>
         </div>
-      )}
+      </div>
     </>
   );
 }
