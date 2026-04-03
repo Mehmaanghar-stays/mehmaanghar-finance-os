@@ -25,7 +25,7 @@ export async function DELETE(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "reports", "delete");
   } catch (err) {
     if (err instanceof RoleRequiredError) {
       return NextResponse.json({ error: err.message }, { status: 403 });

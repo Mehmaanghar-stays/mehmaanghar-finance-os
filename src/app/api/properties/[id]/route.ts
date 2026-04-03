@@ -56,7 +56,7 @@ export async function PATCH(
   if (!role) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
-  try { requireRole(role, ["SuperAdmin"]); }
+  try { await assertPermission(role, "properties", "update"); }
   catch (err) { return handleError(err); }
 
   const { id } = await params;
@@ -100,7 +100,7 @@ export async function DELETE(
   if (!role) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
-  try { requireRole(role, ["SuperAdmin"]); }
+  try { await assertPermission(role, "properties", "delete"); }
   catch (err) { return handleError(err); }
 
   const { id } = await params;

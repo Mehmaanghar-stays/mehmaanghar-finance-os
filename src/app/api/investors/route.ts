@@ -145,7 +145,7 @@ export async function POST(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "investors", "create");
   } catch (err) {
     return handleError(err);
   }
@@ -224,7 +224,7 @@ export async function PUT(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "investors", "update");
   } catch (err) {
     return handleError(err);
   }
@@ -288,7 +288,7 @@ export async function DELETE(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "investors", "delete");
   } catch (err) {
     return handleError(err);
   }

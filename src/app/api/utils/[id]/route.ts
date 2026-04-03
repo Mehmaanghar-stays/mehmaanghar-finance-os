@@ -125,7 +125,7 @@ export async function DELETE(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "utils", "delete");
   } catch (err) {
     return handleError(err);
   }

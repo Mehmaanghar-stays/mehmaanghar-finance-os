@@ -180,7 +180,7 @@ export async function POST(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "create");
   } catch (err) {
     return handleError(err);
   }
@@ -270,7 +270,7 @@ export async function PUT(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "update");
   } catch (err) {
     return handleError(err);
   }
@@ -351,7 +351,7 @@ export async function DELETE(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "delete");
   } catch (err) {
     return handleError(err);
   }

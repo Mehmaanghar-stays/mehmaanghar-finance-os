@@ -96,7 +96,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!role) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
-  try { requireRole(role, ["SuperAdmin"]); }
+  try { await assertPermission(role, "properties", "create"); }
   catch (err) { return handleError(err); }
 
   let body: Record<string, unknown>;

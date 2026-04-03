@@ -258,7 +258,7 @@ export async function PUT(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "utils", "update");
   } catch (err) {
     return handleError(err);
   }

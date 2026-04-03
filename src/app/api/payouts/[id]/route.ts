@@ -105,7 +105,7 @@ export async function PATCH(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "update");
   } catch (err) {
     return handleError(err);
   }
@@ -195,7 +195,7 @@ export async function DELETE(
   }
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    await assertPermission(role, "payouts", "delete");
   } catch (err) {
     return handleError(err);
   }
