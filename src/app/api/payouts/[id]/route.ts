@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
   requireRole,
+  assertPermission,
   PermissionError,
   RoleRequiredError,
 } from "@/lib/permissions";

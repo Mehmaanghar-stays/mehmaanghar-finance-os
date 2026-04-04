@@ -3,7 +3,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, PermissionError, RoleRequiredError } from "@/lib/permissions";
+import { requireRole, assertPermission, PermissionError, RoleRequiredError } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
 
 interface PropertyRow {

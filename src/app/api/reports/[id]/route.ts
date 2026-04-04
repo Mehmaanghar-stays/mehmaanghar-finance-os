@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireRole, RoleRequiredError } from "@/lib/permissions";
+import { requireRole, assertPermission, RoleRequiredError } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
 
 interface ErrorResponse {
