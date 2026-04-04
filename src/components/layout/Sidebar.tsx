@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { verifyToken } from '@/lib/auth';
-import { getRolePermissions } from '@/lib/permissions';
+import { getRolePermissions, SUPER_ADMIN } from '@/lib/permissions';
 import type { TabKey } from '@/lib/permissions';
 import { NavItem } from './NavItem';
 import { LogoutButton } from './LogoutButton';
@@ -219,7 +219,8 @@ export async function Sidebar() {
 
   if (!session) return null;
 
-  const rolePerms = await getRolePermissions(session.role);
+  const isSuperAdmin = session.role === SUPER_ADMIN;
+  const rolePerms = isSuperAdmin ? null : await getRolePermissions(session.role);
   const tabPerms  = rolePerms?.tabPermissions ?? {};
 
   return (
@@ -242,7 +243,7 @@ export async function Sidebar() {
       <nav className={styles['sb-nav']}>
         {NAV_SECTIONS.map((section) => {
           const visibleItems = section.items.filter(
-            (item) => tabPerms[item.permKey] === true,
+            (item) => isSuperAdmin || tabPerms[item.permKey] === true,
           );
 
           if (visibleItems.length === 0) return null;

@@ -10,7 +10,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import styles from '@/components/ui/ui.module.css';
-import type { TabKey, CrudAction } from '@/lib/permissions';
+import type { TabKey, CrudAction } from '@/lib/permissions.types';
+import { SUPER_ADMIN } from '@/lib/permissions.types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -185,7 +186,7 @@ export function UsersClient() {
       const fetched: RoleRow[] = data.roles ?? [];
       setRoles(fetched);
 
-      const firstNonSuper = fetched.find((r) => r.name !== 'SuperAdmin');
+      const firstNonSuper = fetched.find((r) => r.name !== SUPER_ADMIN);
       if (firstNonSuper) {
         setFormRoleId(firstNonSuper.id);
         setSelectedRoleId(firstNonSuper.id);
@@ -333,7 +334,7 @@ export function UsersClient() {
 
   async function handleSavePermissions(roleId: string) {
     const role = roles.find((r) => r.id === roleId);
-    if (!role || role.name === 'SuperAdmin') return;
+    if (!role || role.name === SUPER_ADMIN) return;
     setSavingRoleId(roleId);
     try {
       const res = await fetch('/api/roles', {
@@ -361,9 +362,9 @@ export function UsersClient() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const selectedRole         = roles.find((r) => r.id === selectedRoleId);
-  const isSuperAdminSelected = selectedRole?.name === 'SuperAdmin';
-  const nonSuperAdminRoles   = roles.filter((r) => r.name !== 'SuperAdmin');
-  const superAdminRole       = roles.find((r) => r.name === 'SuperAdmin');
+  const isSuperAdminSelected = selectedRole?.name === SUPER_ADMIN;
+  const nonSuperAdminRoles   = roles.filter((r) => r.name !== SUPER_ADMIN);
+  const superAdminRole       = roles.find((r) => r.name === SUPER_ADMIN);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -440,7 +441,7 @@ export function UsersClient() {
                 disabled={formLoading || loadingRoles}
               >
                 {roles
-                  .filter((r) => r.name !== 'SuperAdmin')
+                  .filter((r) => r.name !== SUPER_ADMIN)
                   .map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
             </div>
@@ -504,7 +505,7 @@ export function UsersClient() {
               </thead>
               <tbody>
                 {users.map((u) => {
-                  const isSuperAdmin = u.role.name === 'SuperAdmin';
+                  const isSuperAdmin = u.role.name === SUPER_ADMIN;
                   const isAdmin      = u.role.name === 'Admin';
                   const isCoHost     = u.role.name === 'Co-Host';
                   return (

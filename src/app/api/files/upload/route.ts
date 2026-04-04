@@ -26,6 +26,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { uploadFile } from "@/lib/storage";
 
 // ---------------------------------------------------------------------------
@@ -100,10 +101,11 @@ async function compressImage(
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<UploadResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   let formData: FormData;
   try {
@@ -171,7 +173,6 @@ export async function POST(
       compressed       = true;
     } catch (err) {
       // Compression failed — upload original rather than block the user
-      console.error("[upload] Compression failed, uploading original:", err);
     }
   }
   // PDFs: no compression — pass through unchanged

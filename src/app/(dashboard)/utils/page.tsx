@@ -41,7 +41,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, getCrudFlags } from '@/lib/permissions';
 import { UtilsClient } from './UtilsClient';
 import type { UtilEntry, UtilsProperty } from './UtilsClient';
 
@@ -55,14 +55,9 @@ export default async function UtilsPage() {
   const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
-  if (tabPerms['utils'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'utils'))) redirect('/dashboard');
 
-  const canCreate = crudPerms['utils']?.create === true;
-  const canEdit   = crudPerms['utils']?.update === true;
-  const canDelete = crudPerms['utils']?.delete === true;
+  const { canCreate, canEdit, canDelete } = await getCrudFlags(session.role, 'utils');
 
   // ── Fetch utils entries from UtilsSetting key-value store ─────────────────
   let entries: UtilEntry[] = [];

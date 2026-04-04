@@ -47,7 +47,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab } from '@/lib/permissions';
 import { PayoutsClient } from './PayoutsClient';
 
 // ---------------------------------------------------------------------------
@@ -86,9 +86,7 @@ export default async function PayoutsPage() {
   const session = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions ?? {};
-  if (tabPerms['payouts'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'payouts'))) redirect('/dashboard');
 
   // ── Fetch payouts with property + investor names ──────────────────────────
   const rawPayouts = await prisma.payout.findMany({

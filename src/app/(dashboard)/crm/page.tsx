@@ -25,7 +25,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab } from '@/lib/permissions';
 import { CrmClient } from './CrmClient';
 
 // ---------------------------------------------------------------------------
@@ -71,9 +71,7 @@ export default async function CrmPage() {
   const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions ?? {};
-  if (tabPerms['crm'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'crm'))) redirect('/dashboard');
 
   // ── Fetch all bookings (used for period filtering + detail panel) ──────────
   const rawBookings = await prisma.booking.findMany({

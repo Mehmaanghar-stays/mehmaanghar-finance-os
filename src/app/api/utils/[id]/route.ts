@@ -12,11 +12,11 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { loadEntries, saveEntries } from "@/app/api/utils/route";
 import type { UtilEntry } from "@/app/api/utils/route";
 import {
   assertPermission,
-  requireRole,
   PermissionError,
   RoleRequiredError,
 } from "@/lib/permissions";
@@ -40,10 +40,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ data: UtilEntry } | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "utils", "update");
@@ -119,10 +120,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "utils", "delete");

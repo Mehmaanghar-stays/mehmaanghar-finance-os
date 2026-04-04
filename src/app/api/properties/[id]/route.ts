@@ -2,8 +2,9 @@
 // PATCH — update property. DELETE — guarded delete. SuperAdmin only.
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { requireRole, assertPermission, PermissionError, RoleRequiredError } from "@/lib/permissions";
+import { assertPermission, PermissionError, RoleRequiredError } from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
 
 interface PropertyRow {
@@ -52,10 +53,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: Params
 ): Promise<NextResponse<{ data: PropertyRow } | { error: string }>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
   try { await assertPermission(role, "properties", "update"); }
   catch (err) { return handleError(err); }
 
@@ -96,10 +98,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: Params
 ): Promise<NextResponse<{ success: true } | { error: string }>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
   try { await assertPermission(role, "properties", "delete"); }
   catch (err) { return handleError(err); }
 

@@ -21,6 +21,9 @@ import bcrypt from "bcryptjs";
 
 config({ path: ".env.local" });
 
+// Role names — must match the strings stored in the DB and used in proxy.ts JWT
+const SUPER_ADMIN = "SuperAdmin";
+
 const pool = new Pool({ connectionString: process.env.DIRECT_URL });
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adapter = new PrismaPg(pool as any);
@@ -112,9 +115,9 @@ async function main(): Promise<void> {
 
   // -- SuperAdmin role --
   const superAdminRole = await prisma.role.upsert({
-    where:  { name: "SuperAdmin" },
+    where:  { name: SUPER_ADMIN },
     update: { tab_permissions: allTabsVisible(), crud_permissions: allTabsCrud() },
-    create: { name: "SuperAdmin", tab_permissions: allTabsVisible(), crud_permissions: allTabsCrud() },
+    create: { name: SUPER_ADMIN, tab_permissions: allTabsVisible(), crud_permissions: allTabsCrud() },
   });
   console.log(`[seed] SuperAdmin role — id: ${superAdminRole.id}`);
 

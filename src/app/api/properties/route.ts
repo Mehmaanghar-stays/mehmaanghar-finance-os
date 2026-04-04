@@ -2,13 +2,12 @@
 // GET — list properties. POST — create property (SuperAdmin only).
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   assertPermission,
-  requireRole,
   PermissionError,
-  RoleRequiredError,
-} from "@/lib/permissions";
+  RoleRequiredError, SUPER_ADMIN} from "@/lib/permissions";
 import { Prisma } from "@/generated/prisma/client/client";
 
 // ---------------------------------------------------------------------------
@@ -56,19 +55,20 @@ function handleError(err: unknown): NextResponse<{ error: string }> {
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
   try { await assertPermission(role, "properties", "read"); }
   catch (err) { return handleError(err); }
 
   try {
     let properties;
-    if (role === "SuperAdmin") {
+    if (role === SUPER_ADMIN) {
       properties = await prisma.property.findMany({ orderBy: { name: "asc" } });
     } else {
-      const userId = request.headers.get("x-user-id") ?? "";
+      const userId = session.userId;
       void userId;
       const [bookingProps, expenseProps] = await Promise.all([
         prisma.booking.findMany({ select: { property_id: true }, distinct: ["property_id"] }),
@@ -92,10 +92,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
   try { await assertPermission(role, "properties", "create"); }
   catch (err) { return handleError(err); }
 

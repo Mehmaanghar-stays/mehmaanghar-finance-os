@@ -11,21 +11,23 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { requireRole, type TabPermissions, type CrudPermissions } from "@/lib/permissions";
+import { requireRole, type TabPermissions, type CrudPermissions, SUPER_ADMIN} from "@/lib/permissions";
 
 // ---------------------------------------------------------------------------
 // GET /api/roles
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    requireRole(role, [SUPER_ADMIN]);
   } catch {
     return NextResponse.json(
       { error: "Forbidden. SuperAdmin access required." },
@@ -48,7 +50,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ roles }, { status: 200 });
   } catch (err) {
-    console.error("[GET /api/roles]", err);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }
@@ -62,13 +63,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 // ---------------------------------------------------------------------------
 
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    requireRole(role, [SUPER_ADMIN]);
   } catch {
     return NextResponse.json(
       { error: "Forbidden. SuperAdmin access required." },
@@ -153,8 +155,6 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
         { status: 404 }
       );
     }
-
-    console.error("[PATCH /api/roles]", err);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }

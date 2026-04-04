@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, getCrudFlags } from '@/lib/permissions';
 import { PropertiesClient } from './PropertiesClient';
 import type { SerializableReport } from '../dashboard/page';
 
@@ -45,15 +45,9 @@ export default async function PropertiesPage() {
   const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms  = await getRolePermissions(session.role);
-  const tabPerms   = rolePerms?.tabPermissions  ?? {};
-  const crudPerms  = rolePerms?.crudPermissions ?? {};
+  if (!(await canAccessTab(session.role, 'properties'))) redirect('/dashboard');
 
-  if (tabPerms['properties'] !== true) redirect('/dashboard');
-
-  const canCreate = crudPerms['properties']?.create === true;
-  const canEdit   = crudPerms['properties']?.update === true;
-  const canDelete = crudPerms['properties']?.delete === true;
+  const { canCreate, canEdit, canDelete } = await getCrudFlags(session.role, 'properties');
 
   // ── Fetch properties ──────────────────────────────────────────────────────
   const rawProps = await prisma.property.findMany({

@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { regenReports } from "@/lib/regenReports";
 
 interface ErrorResponse {
@@ -18,10 +19,11 @@ interface ErrorResponse {
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     const result = await regenReports();

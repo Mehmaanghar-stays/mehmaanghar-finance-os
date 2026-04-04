@@ -8,7 +8,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab } from '@/lib/permissions';
 import { InsightsClient } from './InsightsClient';
 import type { InsightsProperty } from './InsightsClient';
 import type { SerializableReport } from '../dashboard/page';
@@ -20,9 +20,7 @@ export default async function InsightsPage() {
   const session = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions ?? {};
-  if (tabPerms['insights'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'insights'))) redirect('/dashboard');
 
   // Current period defaults — matches Zustand store defaults
   const now = new Date();

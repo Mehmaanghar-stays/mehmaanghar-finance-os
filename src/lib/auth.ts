@@ -162,6 +162,26 @@ export async function getSessionFromRequest(
 }
 
 // ---------------------------------------------------------------------------
+// API route session — the ONLY auth entry point for route handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads the JWT cookie from the request, verifies it, returns { userId, role }.
+ * Returns null when the request is unauthenticated.
+ *
+ * Every API route handler calls this as its first line. Routes never read
+ * x-user-role or x-user-id headers — they verify the cookie themselves.
+ * This makes each route self-contained and independent of proxy.ts behaviour.
+ */
+export async function getApiSession(
+  request: NextRequest
+): Promise<{ userId: string; role: string } | null> {
+  const session = await getSessionFromRequest(request);
+  if (!session) return null;
+  return { userId: session.sub, role: session.role };
+}
+
+// ---------------------------------------------------------------------------
 // bcrypt — hash password
 // ---------------------------------------------------------------------------
 

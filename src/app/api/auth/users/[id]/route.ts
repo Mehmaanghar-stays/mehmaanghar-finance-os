@@ -8,9 +8,10 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
-import { requireRole } from "@/lib/permissions";
+import { requireRole, SUPER_ADMIN} from "@/lib/permissions";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,11 +20,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: Params
 ): Promise<NextResponse> {
-  const role       = request.headers.get("x-user-role") ?? "";
-  const requesterId = request.headers.get("x-user-id") ?? "";
+  const role       = (await getApiSession(request))?.role ?? "";
+  const requesterId = session.userId;
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    requireRole(role, [SUPER_ADMIN]);
   } catch {
     return NextResponse.json(
       { error: "Forbidden. SuperAdmin access required." },
@@ -50,7 +51,7 @@ export async function DELETE(
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
 
-    if (target.role.name === "SuperAdmin") {
+    if (target.role.name === SUPER_ADMIN) {
       return NextResponse.json(
         { error: "SuperAdmin accounts cannot be deleted." },
         { status: 400 }
@@ -60,7 +61,6 @@ export async function DELETE(
     await prisma.user.delete({ where: { id } });
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    console.error("[DELETE /api/auth/users/[id]]", err);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }
@@ -73,13 +73,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: Params
 ): Promise<NextResponse> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
-    requireRole(role, ["SuperAdmin"]);
+    requireRole(role, [SUPER_ADMIN]);
   } catch {
     return NextResponse.json(
       { error: "Forbidden. SuperAdmin access required." },
@@ -115,7 +116,7 @@ export async function PATCH(
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
 
-    if (target.role.name === "SuperAdmin") {
+    if (target.role.name === SUPER_ADMIN) {
       return NextResponse.json(
         { error: "Cannot change SuperAdmin password via this route." },
         { status: 400 }
@@ -130,7 +131,6 @@ export async function PATCH(
 
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (err) {
-    console.error("[PATCH /api/auth/users/[id]]", err);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }

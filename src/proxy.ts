@@ -1,16 +1,19 @@
 // src/proxy.ts
 // =============================================================================
-// MehmanGhar Financial OS — JWT + Role Guard Proxy
+// MehmanGhar Financial OS — Routing Proxy
 //
-// Next.js 16: middleware.ts is deprecated. This file must be named proxy.ts
-// and the exported function must be named `proxy`.
+// Next.js 16: proxy.ts replaces middleware.ts.
 //
-// Responsibilities:
+// Responsibilities (routing only — per Next.js 16 best practices):
 //   1. Allow public routes through with no token check.
-//   2. Extract the session JWT from the HttpOnly cookie.
-//   3. Verify the JWT using jose jwtVerify (HS256).
-//   4. Reject unauthenticated requests — 401 for API routes, redirect for pages.
-//   5. Forward verified user context via x-user-id and x-user-role headers.
+//   2. Lightweight JWT verification — reject expired/invalid tokens early.
+//   3. Redirect unauthenticated page requests to /login.
+//   4. Return 401 for unauthenticated API requests.
+//
+// Auth in route handlers:
+//   API routes verify the JWT cookie themselves via getApiSession() from
+//   @/lib/auth. Routes never depend on proxy-injected headers. This makes
+//   every route self-contained and resilient to proxy behaviour changes.
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -56,15 +59,6 @@ export const config = {
 };
 
 // ---------------------------------------------------------------------------
-// JWT payload shape
-// ---------------------------------------------------------------------------
-
-interface JwtPayload {
-  sub: string;
-  role: string;
-}
-
-// ---------------------------------------------------------------------------
 // Proxy entry point
 // ---------------------------------------------------------------------------
 
@@ -83,9 +77,7 @@ export default async function proxy(request: NextRequest): Promise<NextResponse>
     return rejectRequest(request, pathname, "No session token.");
   }
 
-  // 3. Verify the JWT.
-  let payload: JwtPayload;
-
+  // 3. Verify the JWT — reject invalid/expired tokens early.
   try {
     const secret = getJwtSecret();
     const { payload: verified } = await jwtVerify(token, secret, {
@@ -98,11 +90,6 @@ export default async function proxy(request: NextRequest): Promise<NextResponse>
     ) {
       return rejectRequest(request, pathname, "Malformed token payload.");
     }
-
-    payload = {
-      sub: verified.sub,
-      role: verified["role"] as string,
-    };
   } catch (err) {
     if (err instanceof joseErrors.JWTExpired) {
       return rejectRequest(request, pathname, "Session expired.");
@@ -117,14 +104,9 @@ export default async function proxy(request: NextRequest): Promise<NextResponse>
     return rejectRequest(request, pathname, "Authentication error.");
   }
 
-  // 4. Token valid — forward user context to API routes and Server Components.
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-user-id", payload.sub);
-  requestHeaders.set("x-user-role", payload.role);
-
-  return NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+  // 4. Token valid — allow request through. Route handlers will verify
+  //    the cookie themselves via getApiSession() for role/permission checks.
+  return NextResponse.next();
 }
 
 // ---------------------------------------------------------------------------
