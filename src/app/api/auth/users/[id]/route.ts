@@ -20,7 +20,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: Params
 ): Promise<NextResponse> {
-  const role       = (await getApiSession(request))?.role ?? "";
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
+  }
+  const role        = session.role;
   const requesterId = session.userId;
 
   try {
