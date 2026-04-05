@@ -679,8 +679,8 @@ export function UsersClient() {
               HOW PERMISSIONS WORK
             </div>
             {[
-              { icon: '👁', label: 'Visible', desc: 'Tab appears in the sidebar.' },
-              { icon: '📖', label: 'Read',    desc: 'Can view data. Visible is auto-enabled.' },
+              { icon: '👁', label: 'Visible', desc: 'Tab appears in the sidebar. Auto-enables Read.' },
+              { icon: '📖', label: 'Read',    desc: 'Can view data. Turning off hides the tab.' },
               { icon: '✏️', label: 'Create',  desc: 'Can add new records.' },
               { icon: '🔄', label: 'Update',  desc: 'Can edit existing records.' },
               { icon: '🗑', label: 'Delete',  desc: 'Can delete records from this tab.' },
@@ -704,7 +704,6 @@ export function UsersClient() {
               These actions are locked to SuperAdmin regardless of the permissions granted above.
             </div>
             {[
-              { label: 'Regenerate Reports',   desc: 'Rebuild all reports from source data.' },
               { label: 'Sync Payouts',         desc: 'Create missing payout records from reports.' },
               { label: 'Recalculate Payouts',  desc: 'Recompute all pending payout amounts.' },
               { label: 'Backup & Restore',     desc: 'Export or restore the full database.' },
