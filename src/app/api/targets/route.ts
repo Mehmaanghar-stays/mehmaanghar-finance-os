@@ -24,8 +24,14 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getApiSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Prisma } from '@/generated/prisma/client/client';
+import {
+  assertPermission,
+  PermissionError,
+  RoleRequiredError,
+} from '@/lib/permissions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -72,9 +78,9 @@ function sanitizeTargets(raw: unknown): Targets {
 export async function GET(
   request: NextRequest
 ): Promise<NextResponse<TargetsResponse | ErrorResponse>> {
-  const role = request.headers.get('x-user-role') ?? '';
-  if (!role) {
-    return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorised.' }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -111,9 +117,19 @@ export async function GET(
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<TargetsResponse | ErrorResponse>> {
-  const role = request.headers.get('x-user-role') ?? '';
-  if (!role) {
-    return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorised.' }, { status: 401 });
+  }
+  const role = session.role;
+
+  try {
+    await assertPermission(role, 'insights', 'update');
+  } catch (err) {
+    if (err instanceof PermissionError || err instanceof RoleRequiredError) {
+      return NextResponse.json({ error: err.message }, { status: 403 });
+    }
+    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
 
   let body: Record<string, unknown>;

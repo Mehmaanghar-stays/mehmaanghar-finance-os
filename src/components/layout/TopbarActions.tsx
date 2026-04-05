@@ -29,6 +29,7 @@ import type { PropertySavePayload } from '@/app/(dashboard)/properties/PropModal
 import type { InvestorSavePayload } from '@/app/(dashboard)/investors/InvModal';
 import type { SerializableProperty } from '@/app/(dashboard)/properties/page';
 import styles from './Topbar.module.css';
+import { SUPER_ADMIN } from "@/lib/permissions.types";
 
 // ---------------------------------------------------------------------------
 // Route segment → export model map (for "Export CSV / PDF" buttons)
@@ -47,7 +48,7 @@ interface TopbarActionsProps {
 // ---------------------------------------------------------------------------
 
 export function TopbarActions({ role }: TopbarActionsProps) {
-  const isSuperAdmin = role === 'SuperAdmin';
+  const isSuperAdmin = role === SUPER_ADMIN;
   const router   = useRouter();
   const { toast } = useToast();
 

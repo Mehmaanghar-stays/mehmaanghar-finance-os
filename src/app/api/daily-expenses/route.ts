@@ -20,10 +20,10 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   assertPermission,
-  requireRole,
   PermissionError,
   RoleRequiredError,
 } from "@/lib/permissions";
@@ -131,10 +131,11 @@ function handleError(err: unknown): NextResponse<ErrorResponse> {
 export async function GET(
   request: NextRequest
 ): Promise<NextResponse<DailyExpenseListResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "dailyexp", "read");
@@ -196,10 +197,11 @@ export async function GET(
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<DailyExpenseSingleResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "dailyexp", "create");
@@ -284,10 +286,11 @@ export async function POST(
 export async function PUT(
   request: NextRequest
 ): Promise<NextResponse<DailyExpenseSingleResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "dailyexp", "update");
@@ -354,10 +357,11 @@ export async function PUT(
 export async function DELETE(
   request: NextRequest
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "dailyexp", "delete");
@@ -396,20 +400,12 @@ export async function DELETE(
       );
     }
 
-    // Delete storage file if one exists (best-effort — storage errors do not
-    // block DB deletion, but are surfaced as a 500 to alert the developer)
     if (existing.invoice_path) {
       try {
         await deleteFile(STORAGE_BUCKET, existing.invoice_path);
-      } catch (storageErr) {
-        // Storage deletion failed — log the path for manual cleanup,
-        // then return 500 rather than silently leaving orphaned files.
-        return NextResponse.json(
-          {
-            error: `Failed to delete invoice file at "${existing.invoice_path}". DB record was not deleted. Please remove the file manually before retrying.`,
-          },
-          { status: 500 }
-        );
+      } catch {
+        // Best-effort: storage file deletion failed — proceed with DB deletion.
+        // Orphaned files are less harmful than blocking the user from deleting records.
       }
     }
 

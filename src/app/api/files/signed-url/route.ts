@@ -16,6 +16,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { getSignedUrl } from "@/lib/storage";
 
 const DEFAULT_EXPIRES_IN = 60; // seconds — v3 plan Section 12
@@ -46,10 +47,11 @@ export async function POST(
   // Decision: no assertPermission() call. If files are ever restricted to
   // specific tabs, add assertPermission(role, tabKey, 'read') here.
   // Validate role header is present (belt-and-suspenders).
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
-    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   let body: Record<string, unknown>;
   try {

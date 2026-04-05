@@ -17,8 +17,9 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getApiSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { requireRole, RoleRequiredError } from '@/lib/permissions';
+import { requireRole, RoleRequiredError, SUPER_ADMIN} from '@/lib/permissions';
 import { verifyPassword } from '@/lib/auth';
 
 interface NukeResponse {
@@ -34,14 +35,15 @@ export async function POST(
   request: NextRequest,
 ): Promise<NextResponse<NukeResponse | ErrorResponse>> {
   // ── 1. SuperAdmin only ────────────────────────────────────────────────────
-  const role     = request.headers.get('x-user-role') ?? '';
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorised.' }, { status: 401 });
   }
-  const userId   = request.headers.get('x-user-id')   ?? '';
+  const role   = session.role;
+  const userId = session.userId;
 
   try {
-    requireRole(role, ['SuperAdmin']);
+    requireRole(role, [SUPER_ADMIN]);
   } catch (err) {
     if (err instanceof RoleRequiredError) {
       return NextResponse.json({ error: err.message }, { status: 403 });
@@ -153,7 +155,6 @@ export async function POST(
         }
       }
     } catch (err) {
-      console.error(`[nuke] failed to clear ${table}:`, err);
       // Continue with remaining tables — partial clear is better than total failure
     }
   }

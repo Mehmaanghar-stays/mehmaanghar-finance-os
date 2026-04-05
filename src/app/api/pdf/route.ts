@@ -9,6 +9,7 @@
 // For 'report': { propName, period, kpiRows, expCats, channels, filename }
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getApiSession } from '@/lib/auth';
 import React from 'react';
 
 // ---------------------------------------------------------------------------
@@ -59,6 +60,11 @@ function todayStr(): string {
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const session = await getApiSession(request);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorised.' }, { status: 401 });
+  }
+
   let body: PdfRequest;
   try {
     body = await request.json() as PdfRequest;
@@ -264,7 +270,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (err) {
-    console.error('[POST /api/pdf]', err);
     return NextResponse.json({ error: 'PDF generation failed' }, { status: 500 });
   }
 }

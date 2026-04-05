@@ -7,7 +7,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, getCrudFlags } from '@/lib/permissions';
 import { MonthlyEntryClient } from './MonthlyEntryClient';
 import type { MonthlyEntryProperty } from './MonthlyEntryClient';
 
@@ -18,12 +18,8 @@ export default async function MonthlyEntryPage() {
   const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
-
-  if (tabPerms['monthlyentry'] !== true) redirect('/dashboard');
-  const canCreate = crudPerms['monthlyentry']?.create === true;
+  if (!(await canAccessTab(session.role, 'monthlyentry'))) redirect('/dashboard');
+  const { canCreate } = await getCrudFlags(session.role, 'monthlyentry');
 
   // ── Fetch properties — only id + name needed for the property selector ─────
   const rawProps = await prisma.property.findMany({

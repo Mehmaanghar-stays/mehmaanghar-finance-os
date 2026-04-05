@@ -8,7 +8,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, SUPER_ADMIN} from '@/lib/permissions';
 import { ReportsClient } from './ReportsClient';
 import type { ReportsProperty } from './ReportsClient';
 import type { SerializableReport } from '../dashboard/page';
@@ -20,9 +20,7 @@ export default async function ReportsPage() {
   const session     = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions ?? {};
-  if (tabPerms['reports'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'reports'))) redirect('/dashboard');
 
   // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({
@@ -77,5 +75,5 @@ export default async function ReportsPage() {
     };
   });
 
-  return <ReportsClient reports={reports} properties={properties} canDelete={session.role === 'SuperAdmin'} />;
+  return <ReportsClient reports={reports} properties={properties} canDelete={session.role === SUPER_ADMIN} />;
 }

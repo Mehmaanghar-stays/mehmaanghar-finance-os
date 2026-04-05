@@ -38,10 +38,13 @@ export default function LoginForm() {
         return;
       }
 
-      // Use ?next= param if present (e.g. redirected from a protected page),
-      // otherwise use the role-specific landing path from the API.
+      // Use ?next= param if it points to an actual page (not just "/").
+      // Otherwise use the role-specific landing path from the API — this is
+      // the first tab the role has access to, so Admin/Co-Host land correctly
+      // even if they don't have dashboard access.
       const next = searchParams.get("next");
-      const landing = (next && next.startsWith("/")) ? next : (data.landingPath ?? "/dashboard");
+      const hasValidNext = next && next.startsWith("/") && next !== "/";
+      const landing = hasValidNext ? next : (data.landingPath ?? "/dashboard");
       router.push(landing);
     } catch {
       setError("Unable to connect. Please check your network and try again.");

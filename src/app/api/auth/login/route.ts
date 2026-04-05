@@ -122,7 +122,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     setSessionCookie(response, token);
     return response;
   } catch (err) {
-    console.error("[POST /api/auth/login]", err);
     return NextResponse.json(
       { error: "An unexpected error occurred." },
       { status: 500 }

@@ -7,7 +7,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, getCrudFlags } from '@/lib/permissions';
 import { DailyExpClient } from './DailyExpClient';
 import type { SerializableDailyExp, DailyExpProperty } from './DailyExpClient';
 
@@ -19,14 +19,9 @@ export default async function DailyExpPage() {
   const session = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
-  if (tabPerms['dailyexp'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'dailyexp'))) redirect('/dashboard');
 
-  const canCreate = crudPerms['dailyexp']?.create === true;
-  const canEdit   = crudPerms['dailyexp']?.update === true;
-  const canDelete = crudPerms['dailyexp']?.delete === true;
+  const { canCreate, canEdit, canDelete } = await getCrudFlags(session.role, 'dailyexp');
 
   // ── Fetch all daily expenses ──────────────────────────────────────────────
   // All records are fetched; period filtering is done client-side via

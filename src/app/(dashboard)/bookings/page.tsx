@@ -6,7 +6,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, getCrudFlags } from '@/lib/permissions';
 import { BookingsClient } from './BookingsClient';
 import type { SerializableBooking, BookingProperty } from './BookingsClient';
 
@@ -18,14 +18,9 @@ export default async function BookingsPage() {
   const session = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
-  if (tabPerms['bookings'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'bookings'))) redirect('/dashboard');
 
-  const canCreate = crudPerms['bookings']?.create === true;
-  const canEdit   = crudPerms['bookings']?.update === true;
-  const canDelete = crudPerms['bookings']?.delete === true;
+  const { canCreate, canEdit, canDelete } = await getCrudFlags(session.role, 'bookings');
 
   // ── Fetch bookings joined with property + guest ───────────────────────────
   const rawBookings = await prisma.booking.findMany({

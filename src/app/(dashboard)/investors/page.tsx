@@ -20,7 +20,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab, getCrudFlags } from '@/lib/permissions';
 import { calcROI } from '@/lib/finance';
 import { InvestorsClient } from './InvestorsClient';
 import type { SerializableProperty } from '../properties/page';
@@ -53,14 +53,9 @@ export default async function InvestorsPage() {
   if (!session) redirect('/login');
 
   // ── Permissions ───────────────────────────────────────────────────────────
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions  ?? {};
-  const crudPerms = rolePerms?.crudPermissions ?? {};
-  if (tabPerms['investors'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'investors'))) redirect('/dashboard');
 
-  const canCreate = crudPerms['investors']?.create === true;
-  const canEdit   = crudPerms['investors']?.update === true;
-  const canDelete = crudPerms['investors']?.delete === true;
+  const { canCreate, canEdit, canDelete } = await getCrudFlags(session.role, 'investors');
 
   // ── Fetch investors ───────────────────────────────────────────────────────
   const rawInvestors = await prisma.investor.findMany({

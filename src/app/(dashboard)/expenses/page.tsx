@@ -7,7 +7,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { getRolePermissions } from '@/lib/permissions';
+import { canAccessTab } from '@/lib/permissions';
 import { ExpensesClient } from './ExpensesClient';
 import type { ExpensesProperty } from './ExpensesClient';
 import type { SerializableReport } from '../dashboard/page';
@@ -19,9 +19,7 @@ export default async function ExpensesPage() {
   const session = token ? await verifyToken(token) : null;
   if (!session) redirect('/login');
 
-  const rolePerms = await getRolePermissions(session.role);
-  const tabPerms  = rolePerms?.tabPermissions ?? {};
-  if (tabPerms['expenses'] !== true) redirect('/dashboard');
+  if (!(await canAccessTab(session.role, 'expenses'))) redirect('/dashboard');
 
   // ── Fetch reports ─────────────────────────────────────────────────────────
   const rawReports = await prisma.report.findMany({

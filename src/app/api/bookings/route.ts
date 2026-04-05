@@ -21,10 +21,10 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
   assertPermission,
-  requireRole,
   PermissionError,
   RoleRequiredError,
 } from "@/lib/permissions";
@@ -141,10 +141,11 @@ function handleError(err: unknown): NextResponse<ErrorResponse> {
 export async function GET(
   request: NextRequest
 ): Promise<NextResponse<BookingListResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "bookings", "read");
@@ -210,10 +211,11 @@ export async function GET(
 export async function POST(
   request: NextRequest
 ): Promise<NextResponse<BookingSingleResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "bookings", "create");
@@ -382,10 +384,11 @@ export async function POST(
 export async function PUT(
   request: NextRequest
 ): Promise<NextResponse<BookingSingleResponse | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "bookings", "update");
@@ -493,10 +496,11 @@ export async function PUT(
 export async function DELETE(
   request: NextRequest
 ): Promise<NextResponse<{ success: true } | ErrorResponse>> {
-  const role = request.headers.get("x-user-role") ?? "";
-  if (!role) {
+  const session = await getApiSession(request);
+  if (!session) {
     return NextResponse.json({ error: "Unauthorised." }, { status: 401 });
   }
+  const role = session.role;
 
   try {
     await assertPermission(role, "bookings", "delete");
